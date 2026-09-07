@@ -1,18 +1,18 @@
 import type { Active, Over } from "@dnd-kit/core"
-import type { FieldType, FormField } from "../model/types"
+import type { FormField } from "../model/types"
 
 /** Droppable id for the canvas list itself (dropping here appends). */
 export const CANVAS_ID = "canvas"
 
 const PALETTE_PREFIX = "palette:"
 
-export function paletteId(type: FieldType): string {
+export function paletteId(type: string): string {
   return `${PALETTE_PREFIX}${type}`
 }
 
 /** Attached to draggables via `data` so handlers know what is being dragged. */
 export type DragData =
-  { kind: "palette"; fieldType: FieldType } | { kind: "field" }
+  { kind: "palette"; fieldType: string } | { kind: "field" }
 
 export function dragData(active: Active): DragData | undefined {
   return active.data.current as DragData | undefined
@@ -20,8 +20,7 @@ export function dragData(active: Active): DragData | undefined {
 
 /** What the DragOverlay should render. */
 export type ActiveDrag =
-  | { kind: "palette"; fieldType: FieldType }
-  | { kind: "field"; field: FormField }
+  { kind: "palette"; fieldType: string } | { kind: "field"; field: FormField }
 
 /** Where a palette item would land if dropped right now. */
 export type DropIndicator =

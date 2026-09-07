@@ -2,12 +2,11 @@ import type { ReactNode } from "react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import type { FormField } from "../model/types"
-import { fieldTypeMeta } from "../model/fieldRegistry"
 import type { ValidationIssue } from "../model/validate"
 import { cx } from "./cx"
 import type { DragData } from "./dnd"
-import { FieldPreview } from "./FieldPreview"
-import { Icon, type IconName } from "./Icon"
+import { useFieldTypes } from "./fieldTypesContext"
+import { Icon } from "./Icon"
 import styles from "./CanvasField.module.css"
 
 interface CanvasFieldProps {
@@ -15,6 +14,7 @@ interface CanvasFieldProps {
   index: number
   count: number
   selected: boolean
+  canDuplicate: boolean
   issues: ValidationIssue[]
   indicator: "before" | "after" | null
   onSelect: (id: string) => void
@@ -28,6 +28,7 @@ export function CanvasField({
   index,
   count,
   selected,
+  canDuplicate,
   issues,
   indicator,
   onSelect,
@@ -56,12 +57,14 @@ export function CanvasField({
     handler()
   }
 
+  const removable = !field.locks?.remove
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cx(styles.wrapper, isDragging && styles.dragging)}
-      data-testid={`canvas-field-${field.key}`}
+      data-testid={`canvas-field-${field.key || field.type}`}
     >
       {indicator === "before" && <DropLine />}
       <FieldCard
@@ -105,6 +108,7 @@ export function CanvasField({
               type="button"
               className="icon-btn"
               aria-label={`Duplicate ${field.label}`}
+              disabled={!canDuplicate}
               onClick={stop(() => onDuplicate(field.id))}
             >
               <Icon name="copy" />
@@ -112,7 +116,13 @@ export function CanvasField({
             <button
               type="button"
               className="icon-btn icon-btn-danger"
-              aria-label={`Delete ${field.label}`}
+              aria-label={
+                removable
+                  ? `Delete ${field.label}`
+                  : `${field.label} cannot be deleted`
+              }
+              title={removable ? undefined : "This field is locked"}
+              disabled={!removable}
               onClick={stop(() => onRemove(field.id))}
             >
               <Icon name="trash" />
@@ -152,8 +162,11 @@ export function FieldCard({
   onSelect,
   className,
 }: FieldCardProps) {
-  const meta = fieldTypeMeta(field.type)
+  const registry = useFieldTypes()
+  const definition = registry.resolve(field.type)
+  const Preview = definition.Preview
   const hasIssues = issues.length > 0
+  const locked = Boolean(field.locks?.remove || field.locks?.key)
 
   return (
     <div
@@ -191,9 +204,17 @@ export function FieldCard({
           )}
         </button>
         <span className={styles.typeBadge}>
-          <Icon name={meta.icon as IconName} size={13} />
-          {meta.label}
+          <span className={styles.typeIcon}>{definition.icon}</span>
+          {definition.label}
         </span>
+        {locked && (
+          <span
+            className={styles.lockBadge}
+            title="Locked by the host application"
+          >
+            Locked
+          </span>
+        )}
         {hasIssues && (
           <span
             className={styles.issueBadge}
@@ -208,10 +229,18 @@ export function FieldCard({
       {field.description && (
         <p className={styles.description}>{field.description}</p>
       )}
-      <FieldPreview field={field} />
-      <div className={styles.footer}>
-        <code className={styles.key}>{field.key}</code>
+      <div className={styles.preview} aria-hidden="true">
+        {Preview ? (
+          <Preview field={field} />
+        ) : (
+          <span className={styles.noPreview}>No preview</span>
+        )}
       </div>
+      {!definition.dataless && (
+        <div className={styles.footer}>
+          <code className={styles.key}>{field.key}</code>
+        </div>
+      )}
     </div>
   )
 }

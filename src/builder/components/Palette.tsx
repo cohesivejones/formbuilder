@@ -1,19 +1,21 @@
 import { useDraggable } from "@dnd-kit/core"
-import type { FieldType } from "../model/types"
-import type { FieldTypeMeta } from "../model/fieldRegistry"
-import { FIELD_TYPES, fieldTypeMeta } from "../model/fieldRegistry"
+import type { FieldTypeDefinition } from "../model/fieldType"
+import type { FormDefinition } from "../model/types"
+import { canAddField } from "../state/reducer"
 import { cx } from "./cx"
-import { Icon, type IconName } from "./Icon"
 import { paletteId, type DragData } from "./dnd"
+import { useFieldTypes } from "./fieldTypesContext"
 import styles from "./Palette.module.css"
 
 const HINT_ID = "palette-hint"
 
 interface PaletteProps {
-  onAdd: (type: FieldType) => void
+  form: FormDefinition
+  onAdd: (type: string) => void
 }
 
-export function Palette({ onAdd }: PaletteProps) {
+export function Palette({ form, onAdd }: PaletteProps) {
+  const registry = useFieldTypes()
   return (
     <div className={styles.palette}>
       <h2 className={styles.heading}>Fields</h2>
@@ -22,9 +24,13 @@ export function Palette({ onAdd }: PaletteProps) {
         selected field.
       </p>
       <ul className={styles.list}>
-        {FIELD_TYPES.map((meta) => (
-          <li key={meta.type}>
-            <PaletteItem meta={meta} onAdd={onAdd} />
+        {registry.all().map((definition) => (
+          <li key={definition.type}>
+            <PaletteItem
+              definition={definition}
+              disabled={!canAddField(registry, form, definition.type)}
+              onAdd={onAdd}
+            />
           </li>
         ))}
       </ul>
@@ -33,16 +39,19 @@ export function Palette({ onAdd }: PaletteProps) {
 }
 
 function PaletteItem({
-  meta,
+  definition,
+  disabled,
   onAdd,
 }: {
-  meta: FieldTypeMeta
-  onAdd: (type: FieldType) => void
+  definition: FieldTypeDefinition
+  disabled: boolean
+  onAdd: (type: string) => void
 }) {
-  const data: DragData = { kind: "palette", fieldType: meta.type }
+  const data: DragData = { kind: "palette", fieldType: definition.type }
   const { setNodeRef, listeners, isDragging } = useDraggable({
-    id: paletteId(meta.type),
+    id: paletteId(definition.type),
     data,
+    disabled,
   })
 
   // Keyboard activation adds the field directly (a plain button press) instead
@@ -50,40 +59,58 @@ function PaletteItem({
   const { onKeyDown, ...pointerListeners } = listeners ?? {}
   void onKeyDown
 
+  const limitReached = disabled && definition.maxInstances !== undefined
+
   return (
     <button
       type="button"
       ref={setNodeRef}
       className={cx(styles.item, isDragging && styles.itemDragging)}
-      aria-label={`Add ${meta.label} field`}
+      aria-label={`Add ${definition.label} field`}
       aria-describedby={HINT_ID}
-      onClick={() => onAdd(meta.type)}
+      disabled={disabled}
+      title={
+        limitReached
+          ? definition.maxInstances === 1
+            ? "Already added. Only one is allowed."
+            : `Limit of ${definition.maxInstances} reached.`
+          : undefined
+      }
+      onClick={() => onAdd(definition.type)}
       {...pointerListeners}
     >
-      <PaletteItemContent meta={meta} />
+      <PaletteItemContent definition={definition} />
+      {limitReached && <span className={styles.limit}>Added</span>}
     </button>
   )
 }
 
-export function PaletteItemContent({ meta }: { meta: FieldTypeMeta }) {
+export function PaletteItemContent({
+  definition,
+}: {
+  definition: FieldTypeDefinition
+}) {
   return (
     <>
-      <span className={styles.itemIcon}>
-        <Icon name={meta.icon as IconName} size={18} />
-      </span>
+      <span className={styles.itemIcon}>{definition.icon}</span>
       <span className={styles.itemText}>
-        <span className={styles.itemLabel}>{meta.label}</span>
-        <span className={styles.itemDescription}>{meta.description}</span>
+        <span className={styles.itemLabel}>{definition.label}</span>
+        {definition.description && (
+          <span className={styles.itemDescription}>
+            {definition.description}
+          </span>
+        )}
       </span>
     </>
   )
 }
 
 /** Rendered inside the DragOverlay while a palette item is being dragged. */
-export function PaletteItemGhost({ type }: { type: FieldType }) {
+export function PaletteItemGhost({ type }: { type: string }) {
+  const registry = useFieldTypes()
   return (
     <div className={cx(styles.item, styles.itemGhost)}>
-      <PaletteItemContent meta={fieldTypeMeta(type)} />
+      <PaletteItemContent definition={registry.resolve(type)} />
     </div>
   )
 }

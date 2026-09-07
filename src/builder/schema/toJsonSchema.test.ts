@@ -1,8 +1,11 @@
 import Ajv2020 from "ajv/dist/2020"
 import addFormats from "ajv-formats"
 import { describe, expect, it } from "vitest"
+import { builtInFieldTypes } from "../fieldTypes/builtIns"
+import { createField, defineFieldType } from "../model/fieldType"
+import { createRegistry } from "../model/registry"
 import type { FormDefinition } from "../model/types"
-import { field } from "../../test/fields"
+import { field, testRegistry } from "../../test/fields"
 import { toJsonSchema } from "./toJsonSchema"
 
 function form(
@@ -10,6 +13,13 @@ function form(
   meta: Partial<FormDefinition> = {},
 ) {
   return { title: "Test form", description: "", fields, ...meta }
+}
+
+function generate(
+  fields: FormDefinition["fields"],
+  meta: Partial<FormDefinition> = {},
+) {
+  return toJsonSchema(form(fields, meta), testRegistry)
 }
 
 function compile(schema: object) {
@@ -20,9 +30,9 @@ function compile(schema: object) {
 
 describe("toJsonSchema", () => {
   it("emits an object schema with title, dialect and closed properties", () => {
-    const { schema } = toJsonSchema(
-      form([field("text", "name")], { description: "Hello" }),
-    )
+    const { schema } = generate([field("text", "name")], {
+      description: "Hello",
+    })
     expect(schema).toMatchObject({
       $schema: "https://json-schema.org/draft/2020-12/schema",
       title: "Test form",
@@ -34,34 +44,30 @@ describe("toJsonSchema", () => {
   })
 
   it("omits empty title and description", () => {
-    const { schema } = toJsonSchema(form([], { title: "  ", description: "" }))
+    const { schema } = generate([], { title: "  ", description: "" })
     expect(schema).not.toHaveProperty("title")
     expect(schema).not.toHaveProperty("description")
   })
 
   it("lists required fields in order", () => {
-    const { schema } = toJsonSchema(
-      form([
-        field("text", "a", { required: true }),
-        field("text", "b"),
-        field("email", "c", { required: true }),
-      ]),
-    )
+    const { schema } = generate([
+      field("text", "a", { required: true }),
+      field("text", "b"),
+      field("email", "c", { required: true }),
+    ])
     expect(schema.required).toEqual(["a", "c"])
   })
 
   it("maps text constraints", () => {
-    const { schema } = toJsonSchema(
-      form([
-        field("text", "code", {
-          label: "Code",
-          description: "Your code",
-          minLength: 2,
-          maxLength: 5,
-          pattern: "^[A-Z]+$",
-        }),
-      ]),
-    )
+    const { schema } = generate([
+      field("text", "code", {
+        label: "Code",
+        description: "Your code",
+        minLength: 2,
+        maxLength: 5,
+        pattern: "^[A-Z]+$",
+      }),
+    ])
     expect(schema.properties?.code).toEqual({
       title: "Code",
       description: "Your code",
@@ -73,16 +79,12 @@ describe("toJsonSchema", () => {
   })
 
   it("drops an invalid regex pattern rather than emitting a broken schema", () => {
-    const { schema } = toJsonSchema(
-      form([field("text", "t", { pattern: "[" })]),
-    )
+    const { schema } = generate([field("text", "t", { pattern: "[" })])
     expect(schema.properties?.t).not.toHaveProperty("pattern")
   })
 
   it("maps email and date to string formats", () => {
-    const { schema } = toJsonSchema(
-      form([field("email", "email"), field("date", "dob")]),
-    )
+    const { schema } = generate([field("email", "email"), field("date", "dob")])
     expect(schema.properties?.email).toMatchObject({
       type: "string",
       format: "email",
@@ -94,13 +96,11 @@ describe("toJsonSchema", () => {
   })
 
   it("maps number fields, switching to integer when requested", () => {
-    const { schema } = toJsonSchema(
-      form([
-        field("number", "age", { integer: true, min: 0, max: 120 }),
-        field("number", "price", { step: 0.5 }),
-        field("number", "zeroStep", { step: 0 }),
-      ]),
-    )
+    const { schema } = generate([
+      field("number", "age", { integer: true, min: 0, max: 120 }),
+      field("number", "price", { step: 0.5 }),
+      field("number", "zeroStep", { step: 0 }),
+    ])
     expect(schema.properties?.age).toMatchObject({
       type: "integer",
       minimum: 0,
@@ -114,15 +114,13 @@ describe("toJsonSchema", () => {
   })
 
   it("maps textarea to string with a textarea widget and rows", () => {
-    const { schema, uiSchema } = toJsonSchema(
-      form([
-        field("textarea", "bio", {
-          rows: 6,
-          maxLength: 500,
-          placeholder: "Tell us",
-        }),
-      ]),
-    )
+    const { schema, uiSchema } = generate([
+      field("textarea", "bio", {
+        rows: 6,
+        maxLength: 500,
+        placeholder: "Tell us",
+      }),
+    ])
     expect(schema.properties?.bio).toMatchObject({
       type: "string",
       maxLength: 500,
@@ -135,12 +133,10 @@ describe("toJsonSchema", () => {
   })
 
   it("maps a single checkbox to boolean with an optional default", () => {
-    const { schema, uiSchema } = toJsonSchema(
-      form([
-        field("checkbox", "agree", { defaultChecked: true }),
-        field("checkbox", "news"),
-      ]),
-    )
+    const { schema, uiSchema } = generate([
+      field("checkbox", "agree", { defaultChecked: true }),
+      field("checkbox", "news"),
+    ])
     expect(schema.properties?.agree).toMatchObject({
       type: "boolean",
       default: true,
@@ -157,12 +153,10 @@ describe("toJsonSchema", () => {
       { id: "1", label: "Yes", value: "yes" },
       { id: "2", label: "No", value: "no" },
     ]
-    const { schema, uiSchema } = toJsonSchema(
-      form([
-        field("radio", "choice", { options }),
-        field("select", "pick", { options, placeholder: "Choose…" }),
-      ]),
-    )
+    const { schema, uiSchema } = generate([
+      field("radio", "choice", { options }),
+      field("select", "pick", { options, placeholder: "Choose…" }),
+    ])
     const expected = {
       type: "string",
       oneOf: [
@@ -181,9 +175,9 @@ describe("toJsonSchema", () => {
       { id: "1", label: "A", value: "a" },
       { id: "2", label: "B", value: "b" },
     ]
-    const { schema, uiSchema } = toJsonSchema(
-      form([field("checkboxGroup", "tags", { options, maxSelected: 2 })]),
-    )
+    const { schema, uiSchema } = generate([
+      field("checkboxGroup", "tags", { options, maxSelected: 2 }),
+    ])
     expect(schema.properties?.tags).toEqual({
       title: "Checkbox group",
       type: "array",
@@ -201,34 +195,28 @@ describe("toJsonSchema", () => {
   })
 
   it("treats a required checkbox group as at least one selection", () => {
-    const { schema } = toJsonSchema(
-      form([
-        field("checkboxGroup", "one", { required: true }),
-        field("checkboxGroup", "two", { required: true, minSelected: 2 }),
-      ]),
-    )
+    const { schema } = generate([
+      field("checkboxGroup", "one", { required: true }),
+      field("checkboxGroup", "two", { required: true, minSelected: 2 }),
+    ])
     expect(schema.properties?.one?.minItems).toBe(1)
     expect(schema.properties?.two?.minItems).toBe(2)
   })
 
   it("drops duplicate option values so oneOf stays satisfiable", () => {
-    const { schema } = toJsonSchema(
-      form([
-        field("select", "s", {
-          options: [
-            { id: "1", label: "A", value: "x" },
-            { id: "2", label: "B", value: "x" },
-          ],
-        }),
-      ]),
-    )
+    const { schema } = generate([
+      field("select", "s", {
+        options: [
+          { id: "1", label: "A", value: "x" },
+          { id: "2", label: "B", value: "x" },
+        ],
+      }),
+    ])
     expect(schema.properties?.s?.oneOf).toHaveLength(1)
   })
 
   it("omits oneOf entirely when a choice field has no options", () => {
-    const { schema } = toJsonSchema(
-      form([field("radio", "r", { options: [] })]),
-    )
+    const { schema } = generate([field("radio", "r", { options: [] })])
     expect(schema.properties?.r).toEqual({
       title: "Radio group",
       type: "string",
@@ -236,10 +224,67 @@ describe("toJsonSchema", () => {
   })
 
   it("keeps ui:order in field order", () => {
-    const { uiSchema } = toJsonSchema(
-      form([field("text", "z"), field("text", "a"), field("text", "m")]),
-    )
+    const { uiSchema } = generate([
+      field("text", "z"),
+      field("text", "a"),
+      field("text", "m"),
+    ])
     expect(uiSchema["ui:order"]).toEqual(["z", "a", "m"])
+  })
+
+  it("skips dataless and unregistered fields", () => {
+    const slot = defineFieldType({
+      type: "slot",
+      label: "Slot",
+      dataless: true,
+      defaults: {},
+    })
+    const registry = createRegistry([...builtInFieldTypes, slot])
+    const { schema, uiSchema } = toJsonSchema(
+      form([
+        field("text", "a"),
+        createField(slot, ""),
+        { ...field("text", "ghost"), type: "vanished" },
+      ]),
+      registry,
+    )
+    expect(Object.keys(schema.properties ?? {})).toEqual(["a"])
+    expect(uiSchema["ui:order"]).toEqual(["a"])
+  })
+
+  it("lets a custom type define its own schema and ui mapping", () => {
+    const rating = defineFieldType<{ max: number }>({
+      type: "rating",
+      label: "Rating",
+      defaults: { max: 5 },
+      toJsonSchema: ({ props }) => ({
+        type: "integer",
+        minimum: 1,
+        maximum: props.max,
+      }),
+      toUiSchema: () => ({
+        "ui:widget": "radio",
+        "ui:options": { stars: true },
+      }),
+    })
+    const registry = createRegistry([rating])
+    const stars = {
+      ...createField(rating, "stars"),
+      label: "Stars",
+      required: true,
+    }
+    const { schema, uiSchema } = toJsonSchema(form([stars]), registry)
+    expect(schema.properties?.stars).toEqual({
+      title: "Stars",
+      type: "integer",
+      minimum: 1,
+      maximum: 5,
+    })
+    expect(schema.required).toEqual(["stars"])
+    expect(uiSchema.stars).toEqual({
+      "ui:widget": "radio",
+      "ui:options": { stars: true },
+    })
   })
 
   it("produces a schema that compiles under strict draft 2020-12 and validates data", () => {
@@ -247,19 +292,17 @@ describe("toJsonSchema", () => {
       { id: "1", label: "Red", value: "red" },
       { id: "2", label: "Blue", value: "blue" },
     ]
-    const { schema } = toJsonSchema(
-      form([
-        field("text", "name", { required: true, minLength: 1 }),
-        field("email", "email", { required: true }),
-        field("number", "age", { integer: true, min: 0 }),
-        field("textarea", "bio"),
-        field("date", "dob"),
-        field("checkbox", "agree"),
-        field("radio", "colour", { options, required: true }),
-        field("select", "fav", { options }),
-        field("checkboxGroup", "likes", { options, required: true }),
-      ]),
-    )
+    const { schema } = generate([
+      field("text", "name", { required: true, minLength: 1 }),
+      field("email", "email", { required: true }),
+      field("number", "age", { integer: true, min: 0 }),
+      field("textarea", "bio"),
+      field("date", "dob"),
+      field("checkbox", "agree"),
+      field("radio", "colour", { options, required: true }),
+      field("select", "fav", { options }),
+      field("checkboxGroup", "likes", { options, required: true }),
+    ])
 
     const validate = compile(schema)
 

@@ -6,6 +6,7 @@ import styles from "./OptionsEditor.module.css"
 
 interface OptionsEditorProps {
   options: FieldOption[]
+  disabled?: boolean
   onChange: (options: FieldOption[]) => void
 }
 
@@ -13,7 +14,11 @@ interface OptionsEditorProps {
  * Edits the label/value pairs of a choice field. A value follows its label
  * (camelCased) until the user edits the value directly.
  */
-export function OptionsEditor({ options, onChange }: OptionsEditorProps) {
+export function OptionsEditor({
+  options,
+  disabled = false,
+  onChange,
+}: OptionsEditorProps) {
   const updateLabel = (id: string, label: string) => {
     onChange(
       options.map((option) => {
@@ -69,6 +74,7 @@ export function OptionsEditor({ options, onChange }: OptionsEditorProps) {
               className="control"
               value={option.label}
               aria-label={`Option ${index + 1} label`}
+              disabled={disabled}
               onChange={(event) => updateLabel(option.id, event.target.value)}
             />
             <input
@@ -76,6 +82,7 @@ export function OptionsEditor({ options, onChange }: OptionsEditorProps) {
               value={option.value}
               aria-label={`Option ${index + 1} value`}
               aria-invalid={option.value.trim() === "" || undefined}
+              disabled={disabled}
               onChange={(event) => updateValue(option.id, event.target.value)}
             />
             <span className={styles.rowActions}>
@@ -83,7 +90,7 @@ export function OptionsEditor({ options, onChange }: OptionsEditorProps) {
                 type="button"
                 className="icon-btn"
                 aria-label={`Move option ${index + 1} up`}
-                disabled={index === 0}
+                disabled={disabled || index === 0}
                 onClick={() => move(index, index - 1)}
               >
                 <Icon name="up" size={14} />
@@ -92,7 +99,7 @@ export function OptionsEditor({ options, onChange }: OptionsEditorProps) {
                 type="button"
                 className="icon-btn"
                 aria-label={`Move option ${index + 1} down`}
-                disabled={index === options.length - 1}
+                disabled={disabled || index === options.length - 1}
                 onClick={() => move(index, index + 1)}
               >
                 <Icon name="down" size={14} />
@@ -101,6 +108,7 @@ export function OptionsEditor({ options, onChange }: OptionsEditorProps) {
                 type="button"
                 className="icon-btn icon-btn-danger"
                 aria-label={`Remove option ${index + 1}`}
+                disabled={disabled}
                 onClick={() => remove(option.id)}
               >
                 <Icon name="close" size={14} />
@@ -109,7 +117,12 @@ export function OptionsEditor({ options, onChange }: OptionsEditorProps) {
           </li>
         ))}
       </ul>
-      <button type="button" className="btn btn-sm" onClick={add}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        onClick={add}
+        disabled={disabled}
+      >
         <Icon name="plus" size={14} />
         Add option
       </button>

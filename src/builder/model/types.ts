@@ -1,20 +1,13 @@
 /**
  * Core data model for the form builder.
  *
- * A `FormDefinition` is the builder's internal representation. It is converted
- * to JSON Schema (plus a UI schema for presentation hints) by `schema/toJsonSchema.ts`.
+ * Every field has the same shape regardless of type. Type-specific settings live
+ * in `props`, whose meaning is defined by the field's `FieldTypeDefinition`
+ * (see fieldType.ts). This lets hosts register their own field types without
+ * the builder knowing about them.
  */
 
-export type FieldType =
-  | "text"
-  | "email"
-  | "number"
-  | "textarea"
-  | "checkbox"
-  | "checkboxGroup"
-  | "radio"
-  | "select"
-  | "date"
+export type FieldProps = Record<string, unknown>
 
 export interface FieldOption {
   id: string
@@ -22,10 +15,31 @@ export interface FieldOption {
   value: string
 }
 
-interface BaseField {
-  /** Stable internal id used for drag-and-drop and selection. Never exported. */
+/**
+ * Host-imposed restrictions on a field. Used for fields whose identity anchors
+ * downstream data (for example an export mapping keyed on the field key), where
+ * an admin may reword the label but must not remove or re-key the field.
+ */
+export interface FieldLocks {
+  /** The field cannot be deleted. */
+  remove?: boolean
+  /** The key cannot be changed and no longer follows the label. */
+  key?: boolean
+  /** Type-specific properties cannot be changed. */
+  props?: boolean
+  /** The required flag cannot be changed. */
+  required?: boolean
+}
+
+export interface FormField<P extends FieldProps = FieldProps> {
+  /** Stable internal id used for drag-and-drop and selection. */
   id: string
-  /** Property name in the generated JSON Schema. Must be unique within the form. */
+  /** Registered field type. */
+  type: string
+  /**
+   * Property name in the generated JSON Schema. Empty for dataless fields
+   * (see FieldTypeDefinition.dataless).
+   */
   key: string
   /**
    * True while the key is being derived from the label. Set to false once the
@@ -35,85 +49,9 @@ interface BaseField {
   label: string
   description?: string
   required: boolean
-}
-
-export interface TextField extends BaseField {
-  type: "text"
-  placeholder?: string
-  minLength?: number
-  maxLength?: number
-  pattern?: string
-}
-
-export interface EmailField extends BaseField {
-  type: "email"
-  placeholder?: string
-}
-
-export interface NumberField extends BaseField {
-  type: "number"
-  placeholder?: string
-  min?: number
-  max?: number
-  step?: number
-  integer: boolean
-}
-
-export interface TextareaField extends BaseField {
-  type: "textarea"
-  placeholder?: string
-  rows: number
-  maxLength?: number
-}
-
-export interface CheckboxField extends BaseField {
-  type: "checkbox"
-  defaultChecked: boolean
-}
-
-export interface CheckboxGroupField extends BaseField {
-  type: "checkboxGroup"
-  options: FieldOption[]
-  minSelected?: number
-  maxSelected?: number
-}
-
-export interface RadioField extends BaseField {
-  type: "radio"
-  options: FieldOption[]
-}
-
-export interface SelectField extends BaseField {
-  type: "select"
-  options: FieldOption[]
-  placeholder?: string
-}
-
-export interface DateField extends BaseField {
-  type: "date"
-}
-
-export type FormField =
-  | TextField
-  | EmailField
-  | NumberField
-  | TextareaField
-  | CheckboxField
-  | CheckboxGroupField
-  | RadioField
-  | SelectField
-  | DateField
-
-export type FieldOfType<T extends FieldType> = Extract<FormField, { type: T }>
-
-export type OptionsField = CheckboxGroupField | RadioField | SelectField
-
-export function hasOptions(field: FormField): field is OptionsField {
-  return (
-    field.type === "checkboxGroup" ||
-    field.type === "radio" ||
-    field.type === "select"
-  )
+  /** Type-specific settings, shaped by the field type's `defaults` and `properties`. */
+  props: P
+  locks?: FieldLocks
 }
 
 export interface FormDefinition {

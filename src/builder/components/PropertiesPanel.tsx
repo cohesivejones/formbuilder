@@ -1,30 +1,41 @@
 import { useId, type ReactNode } from "react"
-import type { FieldOption, FormField } from "../model/types"
-import { fieldTypeMeta } from "../model/fieldRegistry"
+import { baseProperties, type PropertySpec } from "../model/fieldType"
 import { isValidKey, slugifyKey } from "../model/keys"
+import type { FieldOption, FieldProps, FormField } from "../model/types"
 import type { ValidationIssue } from "../model/validate"
 import type { FieldPatch } from "../state/reducer"
-import { Icon, type IconName } from "./Icon"
+import { cx } from "./cx"
+import { useFieldTypes } from "./fieldTypesContext"
+import { Icon } from "./Icon"
 import { OptionsEditor } from "./OptionsEditor"
 import styles from "./PropertiesPanel.module.css"
 
 interface PropertiesPanelProps {
   field: FormField | null
   issues: ValidationIssue[]
+  canDuplicate: boolean
   onChange: (patch: FieldPatch) => void
-  onSetOptions: (options: FieldOption[]) => void
   onDuplicate: () => void
   onRemove: () => void
 }
 
+const DEFAULT_SECTION = "Settings"
+
+/**
+ * Edits the selected field. Generic settings come first; type-specific ones are
+ * rendered from the field type's declarative `properties`, grouped by section,
+ * followed by the type's custom editor component if it has one.
+ */
 export function PropertiesPanel({
   field,
   issues,
+  canDuplicate,
   onChange,
-  onSetOptions,
   onDuplicate,
   onRemove,
 }: PropertiesPanelProps) {
+  const registry = useFieldTypes()
+
   if (!field) {
     return (
       <div className={styles.empty}>
@@ -33,15 +44,32 @@ export function PropertiesPanel({
     )
   }
 
-  const meta = fieldTypeMeta(field.type)
+  const definition = registry.resolve(field.type)
+  const base = baseProperties(definition)
+  const locks = field.locks ?? {}
+  const showKey = !definition.dataless
+  const showGeneral = base.size > 0 || showKey
+  const sections = groupBySection(definition.properties ?? [])
+  const Editor = definition.PropertiesEditor
+
+  const setProp = (name: string, value: unknown) =>
+    onChange({ props: { [name]: value } })
 
   return (
     <div className={styles.panel} key={field.id}>
       <div className={styles.typeRow}>
         <span className={styles.typeBadge}>
-          <Icon name={meta.icon as IconName} size={14} />
-          {meta.label}
+          <span className={styles.typeIcon}>{definition.icon}</span>
+          {definition.label}
         </span>
+        {(locks.remove || locks.key || locks.props) && (
+          <span
+            className={styles.lockNote}
+            title="Some settings are fixed by the host application"
+          >
+            Locked
+          </span>
+        )}
       </div>
 
       {issues.length > 0 && (
@@ -55,38 +83,66 @@ export function PropertiesPanel({
         </ul>
       )}
 
-      <Section title="General">
-        <TextRow
-          label="Label"
-          value={field.label}
-          onChange={(label) => onChange({ label })}
-          autoFocus
-        />
-        <KeyRow field={field} onChange={onChange} />
-        <TextRow
-          label="Help text"
-          value={field.description ?? ""}
-          placeholder="Shown under the label"
-          onChange={(description) =>
-            onChange({ description: description || undefined })
-          }
-          multiline
-        />
-        <CheckRow
-          label="Required"
-          checked={field.required}
-          onChange={(required) => onChange({ required })}
-        />
-      </Section>
+      {showGeneral && (
+        <Section title="General">
+          {base.has("label") && (
+            <TextRow
+              label="Label"
+              value={field.label}
+              onChange={(label) => onChange({ label })}
+              autoFocus
+            />
+          )}
+          {showKey && (
+            <KeyRow
+              field={field}
+              locked={Boolean(locks.key)}
+              onChange={onChange}
+            />
+          )}
+          {base.has("description") && (
+            <TextRow
+              label="Help text"
+              value={field.description ?? ""}
+              placeholder="Shown under the label"
+              onChange={(description) => onChange({ description })}
+              multiline
+            />
+          )}
+          {base.has("required") && (
+            <CheckRow
+              label="Required"
+              checked={field.required}
+              disabled={Boolean(locks.required)}
+              onChange={(required) => onChange({ required })}
+            />
+          )}
+        </Section>
+      )}
 
-      <TypeSpecific
-        field={field}
-        onChange={onChange}
-        onSetOptions={onSetOptions}
-      />
+      {sections.map(([title, specs]) => (
+        <Section key={title} title={title}>
+          {renderSpecs(specs, field.props, Boolean(locks.props), setProp)}
+        </Section>
+      ))}
+
+      {Editor && (
+        <Section title="More settings">
+          <Editor
+            field={field}
+            disabled={Boolean(locks.props)}
+            onChange={(props) => onChange({ props })}
+          />
+        </Section>
+      )}
 
       <div className={styles.footer}>
-        <button type="button" className="btn btn-sm" onClick={onDuplicate}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={onDuplicate}
+          disabled={!canDuplicate}
+        >
           <Icon name="copy" size={14} />
           Duplicate
         </button>
@@ -94,6 +150,8 @@ export function PropertiesPanel({
           type="button"
           className="btn btn-sm btn-danger"
           onClick={onRemove}
+          disabled={Boolean(locks.remove)}
+          title={locks.remove ? "This field is locked" : undefined}
         >
           <Icon name="trash" size={14} />
           Delete field
@@ -103,181 +161,142 @@ export function PropertiesPanel({
   )
 }
 
-function TypeSpecific({
-  field,
+function groupBySection(
+  specs: PropertySpec[],
+): Array<[string, PropertySpec[]]> {
+  const groups = new Map<string, PropertySpec[]>()
+  for (const spec of specs) {
+    const section = spec.section ?? DEFAULT_SECTION
+    groups.set(section, [...(groups.get(section) ?? []), spec])
+  }
+  return [...groups.entries()]
+}
+
+/**
+ * Renders a section's specs. Runs of two or more consecutive number specs are
+ * laid out side by side, which suits min/max style pairs.
+ */
+function renderSpecs(
+  specs: PropertySpec[],
+  props: FieldProps,
+  disabled: boolean,
+  setProp: (name: string, value: unknown) => void,
+): ReactNode[] {
+  const nodes: ReactNode[] = []
+  let i = 0
+  while (i < specs.length) {
+    if (specs[i].kind === "number") {
+      let j = i
+      while (j < specs.length && specs[j].kind === "number") j += 1
+      if (j - i >= 2) {
+        nodes.push(
+          <div key={`pair-${specs[i].name}`} className={styles.pair}>
+            {specs.slice(i, j).map((spec) => (
+              <PropertyControl
+                key={spec.name}
+                spec={spec}
+                value={props[spec.name]}
+                disabled={disabled}
+                onChange={(value) => setProp(spec.name, value)}
+              />
+            ))}
+          </div>,
+        )
+        i = j
+        continue
+      }
+    }
+    const spec = specs[i]
+    nodes.push(
+      <PropertyControl
+        key={spec.name}
+        spec={spec}
+        value={props[spec.name]}
+        disabled={disabled}
+        onChange={(value) => setProp(spec.name, value)}
+      />,
+    )
+    i += 1
+  }
+  return nodes
+}
+
+function PropertyControl({
+  spec,
+  value,
+  disabled,
   onChange,
-  onSetOptions,
 }: {
-  field: FormField
-  onChange: (patch: FieldPatch) => void
-  onSetOptions: (options: FieldOption[]) => void
+  spec: PropertySpec
+  value: unknown
+  disabled: boolean
+  onChange: (value: unknown) => void
 }) {
-  switch (field.type) {
+  switch (spec.kind) {
     case "text":
       return (
-        <Section title="Validation">
-          <TextRow
-            label="Placeholder"
-            value={field.placeholder ?? ""}
-            onChange={(placeholder) => onChange({ placeholder })}
-          />
-          <div className={styles.pair}>
-            <NumberRow
-              label="Min length"
-              value={field.minLength}
-              min={0}
-              onChange={(minLength) => onChange({ minLength })}
-            />
-            <NumberRow
-              label="Max length"
-              value={field.maxLength}
-              min={0}
-              onChange={(maxLength) => onChange({ maxLength })}
-            />
-          </div>
-          <TextRow
-            label="Pattern (regular expression)"
-            value={field.pattern ?? ""}
-            placeholder="^[A-Z]{3}[0-9]{4}$"
-            mono
-            invalid={!isValidRegex(field.pattern)}
-            onChange={(pattern) => onChange({ pattern: pattern || undefined })}
-          />
-        </Section>
-      )
-    case "email":
-      return (
-        <Section title="Display">
-          <TextRow
-            label="Placeholder"
-            value={field.placeholder ?? ""}
-            onChange={(placeholder) => onChange({ placeholder })}
-          />
-        </Section>
+        <TextRow
+          label={spec.label}
+          help={spec.help}
+          value={typeof value === "string" ? value : ""}
+          placeholder={spec.placeholder}
+          multiline={spec.multiline}
+          mono={spec.mono}
+          disabled={disabled}
+          onChange={onChange}
+        />
       )
     case "number":
       return (
-        <Section title="Validation">
-          <TextRow
-            label="Placeholder"
-            value={field.placeholder ?? ""}
-            onChange={(placeholder) => onChange({ placeholder })}
-          />
-          <div className={styles.pair}>
-            <NumberRow
-              label="Minimum"
-              value={field.min}
-              onChange={(min) => onChange({ min })}
-            />
-            <NumberRow
-              label="Maximum"
-              value={field.max}
-              onChange={(max) => onChange({ max })}
-            />
-          </div>
-          <NumberRow
-            label="Step"
-            value={field.step}
-            min={0}
-            step="any"
-            onChange={(step) => onChange({ step })}
-          />
-          <CheckRow
-            label="Whole numbers only"
-            checked={field.integer}
-            onChange={(integer) => onChange({ integer })}
-          />
-        </Section>
+        <NumberRow
+          label={spec.label}
+          help={spec.help}
+          value={typeof value === "number" ? value : undefined}
+          min={spec.min}
+          max={spec.max}
+          step={spec.step}
+          disabled={disabled}
+          onChange={onChange}
+        />
       )
-    case "textarea":
+    case "boolean":
       return (
-        <Section title="Display and validation">
-          <TextRow
-            label="Placeholder"
-            value={field.placeholder ?? ""}
-            onChange={(placeholder) => onChange({ placeholder })}
-          />
-          <div className={styles.pair}>
-            <NumberRow
-              label="Rows"
-              value={field.rows}
-              min={1}
-              onChange={(rows) => onChange({ rows: rows ?? 3 })}
-            />
-            <NumberRow
-              label="Max length"
-              value={field.maxLength}
-              min={0}
-              onChange={(maxLength) => onChange({ maxLength })}
-            />
-          </div>
-        </Section>
+        <CheckRow
+          label={spec.label}
+          checked={value === true}
+          disabled={disabled}
+          onChange={onChange}
+        />
       )
-    case "checkbox":
-      return (
-        <Section title="Default">
-          <CheckRow
-            label="Checked by default"
-            checked={field.defaultChecked}
-            onChange={(defaultChecked) => onChange({ defaultChecked })}
-          />
-        </Section>
-      )
-    case "date":
-      return null
     case "select":
       return (
-        <>
-          <Section title="Display">
-            <TextRow
-              label="Placeholder"
-              value={field.placeholder ?? ""}
-              onChange={(placeholder) => onChange({ placeholder })}
-            />
-          </Section>
-          <Section title="Options">
-            <OptionsEditor options={field.options} onChange={onSetOptions} />
-          </Section>
-        </>
+        <SelectRow
+          label={spec.label}
+          help={spec.help}
+          value={typeof value === "string" ? value : ""}
+          options={spec.options}
+          disabled={disabled}
+          onChange={onChange}
+        />
       )
-    case "radio":
+    case "options":
       return (
-        <Section title="Options">
-          <OptionsEditor options={field.options} onChange={onSetOptions} />
-        </Section>
-      )
-    case "checkboxGroup":
-      return (
-        <>
-          <Section title="Options">
-            <OptionsEditor options={field.options} onChange={onSetOptions} />
-          </Section>
-          <Section title="Validation">
-            <div className={styles.pair}>
-              <NumberRow
-                label="Min selected"
-                value={field.minSelected}
-                min={0}
-                onChange={(minSelected) => onChange({ minSelected })}
-              />
-              <NumberRow
-                label="Max selected"
-                value={field.maxSelected}
-                min={1}
-                onChange={(maxSelected) => onChange({ maxSelected })}
-              />
-            </div>
-          </Section>
-        </>
+        <OptionsEditor
+          options={Array.isArray(value) ? (value as FieldOption[]) : []}
+          disabled={disabled}
+          onChange={onChange}
+        />
       )
   }
 }
 
 function KeyRow({
   field,
+  locked,
   onChange,
 }: {
   field: FormField
+  locked: boolean
   onChange: (patch: FieldPatch) => void
 }) {
   const id = useId()
@@ -286,7 +305,9 @@ function KeyRow({
     <div className={styles.row}>
       <div className={styles.labelLine}>
         <label htmlFor={id}>Key</label>
-        {field.autoKey ? (
+        {locked ? (
+          <span className={styles.badge}>fixed</span>
+        ) : field.autoKey ? (
           <span className={styles.badge}>from label</span>
         ) : (
           <button
@@ -303,9 +324,10 @@ function KeyRow({
       </div>
       <input
         id={id}
-        className={`control ${styles.mono}`}
+        className={cx("control", styles.mono)}
         value={field.key}
         spellCheck={false}
+        disabled={locked}
         aria-invalid={invalid || undefined}
         onChange={(event) => onChange({ key: event.target.value })}
       />
@@ -325,25 +347,27 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function TextRow({
   label,
+  help,
   value,
   placeholder,
   multiline = false,
   mono = false,
-  invalid = false,
+  disabled = false,
   autoFocus = false,
   onChange,
 }: {
   label: string
+  help?: string
   value: string
   placeholder?: string
   multiline?: boolean
   mono?: boolean
-  invalid?: boolean
+  disabled?: boolean
   autoFocus?: boolean
   onChange: (value: string) => void
 }) {
   const id = useId()
-  const className = `control ${mono ? styles.mono : ""}`
+  const className = cx("control", mono && styles.mono)
   return (
     <div className={styles.row}>
       <label htmlFor={id}>{label}</label>
@@ -354,6 +378,7 @@ function TextRow({
           rows={2}
           value={value}
           placeholder={placeholder}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
       ) : (
@@ -362,26 +387,33 @@ function TextRow({
           className={className}
           value={value}
           placeholder={placeholder}
-          aria-invalid={invalid || undefined}
+          disabled={disabled}
           autoFocus={autoFocus}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
+      {help && <p className={styles.help}>{help}</p>}
     </div>
   )
 }
 
 function NumberRow({
   label,
+  help,
   value,
   min,
+  max,
   step,
+  disabled = false,
   onChange,
 }: {
   label: string
+  help?: string
   value: number | undefined
   min?: number
+  max?: number
   step?: number | "any"
+  disabled?: boolean
   onChange: (value: number | undefined) => void
 }) {
   const id = useId()
@@ -395,9 +427,49 @@ function NumberRow({
         inputMode="decimal"
         value={value ?? ""}
         min={min}
+        max={max}
         step={step}
+        disabled={disabled}
         onChange={(event) => onChange(parseNumber(event.target.value))}
       />
+      {help && <p className={styles.help}>{help}</p>}
+    </div>
+  )
+}
+
+function SelectRow({
+  label,
+  help,
+  value,
+  options,
+  disabled = false,
+  onChange,
+}: {
+  label: string
+  help?: string
+  value: string
+  options: { label: string; value: string }[]
+  disabled?: boolean
+  onChange: (value: string) => void
+}) {
+  const id = useId()
+  return (
+    <div className={styles.row}>
+      <label htmlFor={id}>{label}</label>
+      <select
+        id={id}
+        className="control"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {help && <p className={styles.help}>{help}</p>}
     </div>
   )
 }
@@ -405,10 +477,12 @@ function NumberRow({
 function CheckRow({
   label,
   checked,
+  disabled = false,
   onChange,
 }: {
   label: string
   checked: boolean
+  disabled?: boolean
   onChange: (checked: boolean) => void
 }) {
   const id = useId()
@@ -418,6 +492,7 @@ function CheckRow({
         id={id}
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
       <label htmlFor={id}>{label}</label>
@@ -429,14 +504,4 @@ function parseNumber(raw: string): number | undefined {
   if (raw.trim() === "") return undefined
   const n = Number(raw)
   return Number.isFinite(n) ? n : undefined
-}
-
-function isValidRegex(pattern: string | undefined): boolean {
-  if (!pattern) return true
-  try {
-    new RegExp(pattern)
-    return true
-  } catch {
-    return false
-  }
 }

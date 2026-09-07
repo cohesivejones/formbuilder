@@ -17,9 +17,11 @@ import {
   type UniqueIdentifier,
 } from "@dnd-kit/core"
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable"
-import type { FieldType } from "../model/types"
-import { fieldTypeMeta } from "../model/fieldRegistry"
-import { createSampleForm } from "../model/sample"
+import { builtInFieldTypes } from "../fieldTypes/builtIns"
+import type { FieldTypeDefinition } from "../model/fieldType"
+import { createRegistry } from "../model/registry"
+import type { FormDefinition } from "../model/types"
+import { canAddField } from "../state/reducer"
 import { useFormBuilder } from "../state/useFormBuilder"
 import { Canvas } from "./Canvas"
 import { FieldCard } from "./CanvasField"
@@ -31,6 +33,7 @@ import {
   type ActiveDrag,
   type DropIndicator,
 } from "./dnd"
+import { FieldTypesProvider } from "./FieldTypesProvider"
 import { Icon } from "./Icon"
 import { Palette, PaletteItemGhost } from "./Palette"
 import { PropertiesPanel } from "./PropertiesPanel"
@@ -60,20 +63,48 @@ const collisionDetection: CollisionDetection = (args) => {
   })
 }
 
-interface BuilderProps {
-  /** Persist the form to localStorage between reloads. Defaults to true. */
+export interface BuilderProps {
+  /**
+   * Field types available in the palette. Defaults to the built-in set. Pass a
+   * stable (module-level or memoised) array: a new array each render rebuilds
+   * the registry.
+   */
+  fieldTypes?: readonly FieldTypeDefinition[]
+  /** Controlled form. The host owns the state and receives every change via `onChange`. */
+  value?: FormDefinition
+  /** Initial form when uncontrolled. */
+  defaultValue?: FormDefinition
+  onChange?: (form: FormDefinition) => void
+  /** Uncontrolled only: keep the form in localStorage across reloads. */
   persist?: boolean
+  /** Show the JSON Schema output tab. Hosts with their own storage shape can hide it. */
+  showSchema?: boolean
+  /** Enables the "Load sample" action, producing a form to start from. */
+  sample?: () => FormDefinition
+  /** Heading shown in the top bar. */
+  title?: string
 }
 
-export function Builder({ persist = true }: BuilderProps) {
-  const { state, dispatch, selectedField, issues, generated } = useFormBuilder({
-    persist,
-  })
-  const { form, selectedId } = state
+export function Builder({
+  fieldTypes = builtInFieldTypes,
+  value,
+  defaultValue,
+  onChange,
+  persist = false,
+  showSchema = true,
+  sample,
+  title = "Form Builder",
+}: BuilderProps) {
+  const registry = useMemo(() => createRegistry(fieldTypes), [fieldTypes])
+  const { form, selectedId, selectedField, dispatch, issues, generated } =
+    useFormBuilder({ registry, value, defaultValue, onChange, persist })
 
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
-  const [panelTab, setPanelTab] = useState<PanelTab>("schema")
+  const [panelTab, setPanelTab] = useState<PanelTab>(
+    showSchema ? "schema" : "field",
+  )
+  const activeTab: PanelTab = showSchema ? panelTab : "field"
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -91,16 +122,17 @@ export function Builder({ persist = true }: BuilderProps) {
   )
 
   const addField = useCallback(
-    (fieldType: FieldType) => {
+    (fieldType: string, index?: number) => {
+      if (!canAddField(registry, form, fieldType)) return
       const selectedIndex = form.fields.findIndex((f) => f.id === selectedId)
       dispatch({
         type: "addField",
         fieldType,
-        index: selectedIndex === -1 ? undefined : selectedIndex + 1,
+        index: index ?? (selectedIndex === -1 ? undefined : selectedIndex + 1),
       })
       setPanelTab("field")
     },
-    [dispatch, form.fields, selectedId],
+    [dispatch, form, registry, selectedId],
   )
 
   const handleDragStart = ({ active }: DragStartEvent) => {
@@ -128,8 +160,7 @@ export function Builder({ persist = true }: BuilderProps) {
 
     if (data?.kind === "palette") {
       const { index } = resolveDrop(active, over, form.fields)
-      dispatch({ type: "addField", fieldType: data.fieldType, index })
-      setPanelTab("field")
+      addField(data.fieldType, index)
       return
     }
 
@@ -146,9 +177,9 @@ export function Builder({ persist = true }: BuilderProps) {
 
   const announcements = useMemo<Announcements>(() => {
     const describe = (id: UniqueIdentifier, data: unknown) => {
-      const d = data as { kind?: string; fieldType?: FieldType } | undefined
+      const d = data as { kind?: string; fieldType?: string } | undefined
       if (d?.kind === "palette" && d.fieldType) {
-        return `new ${fieldTypeMeta(d.fieldType).label} field`
+        return `new ${registry.resolve(d.fieldType).label} field`
       }
       const field = form.fields.find((f) => f.id === id)
       return field ? `field ${field.label}` : "item"
@@ -174,177 +205,189 @@ export function Builder({ persist = true }: BuilderProps) {
       onDragCancel: ({ active }) =>
         `Dragging ${describe(active.id, active.data.current)} was cancelled.`,
     }
-  }, [form.fields])
+  }, [form.fields, registry])
+
+  const removableCount = form.fields.filter((f) => !f.locks?.remove).length
 
   const clearForm = () => {
-    if (form.fields.length === 0) return
+    if (removableCount === 0) return
     if (window.confirm("Remove all fields from this form?")) {
       dispatch({ type: "clearForm" })
     }
   }
+
+  const loadSample = sample
+    ? () => dispatch({ type: "replaceForm", form: sample() })
+    : undefined
 
   const selectedIssues = selectedField
     ? issues.filter((i) => i.fieldId === selectedField.id)
     : []
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={collisionDetection}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-      accessibility={{ announcements }}
-    >
-      <div className={styles.app}>
-        <header className={styles.topbar}>
-          <h1 className={styles.brand}>Form Builder</h1>
-          <span className={styles.meta}>
-            {form.fields.length} {form.fields.length === 1 ? "field" : "fields"}
-          </span>
-          <div className={styles.topbarActions}>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() =>
-                dispatch({ type: "replaceForm", form: createSampleForm() })
-              }
-            >
-              Load sample
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm btn-danger"
-              onClick={clearForm}
-              disabled={form.fields.length === 0}
-            >
-              <Icon name="trash" size={14} />
-              Clear
-            </button>
-          </div>
-        </header>
-
-        <div className={styles.body}>
-          <aside className={styles.paletteColumn} aria-label="Field palette">
-            <Palette onAdd={addField} />
-          </aside>
-
-          <main className={styles.canvasColumn}>
-            <Canvas
-              form={form}
-              selectedId={selectedId}
-              issues={issues}
-              dropIndicator={dropIndicator}
-              isPaletteDragging={activeDrag?.kind === "palette"}
-              onSelect={selectField}
-              onUpdateForm={(patch) => dispatch({ type: "updateForm", patch })}
-              onMove={(from, to) => dispatch({ type: "moveField", from, to })}
-              onDuplicate={(id) => dispatch({ type: "duplicateField", id })}
-              onRemove={(id) => dispatch({ type: "removeField", id })}
-              onLoadSample={() =>
-                dispatch({ type: "replaceForm", form: createSampleForm() })
-              }
-            />
-          </main>
-
-          <aside className={styles.sideColumn} aria-label="Inspector">
-            <div className={styles.tabs} role="tablist">
-              <button
-                type="button"
-                role="tab"
-                id="tab-field"
-                aria-selected={panelTab === "field"}
-                aria-controls="panel-field"
-                className={cx(
-                  styles.tab,
-                  panelTab === "field" && styles.tabActive,
-                )}
-                onClick={() => setPanelTab("field")}
-              >
-                Field
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="tab-schema"
-                aria-selected={panelTab === "schema"}
-                aria-controls="panel-schema"
-                className={cx(
-                  styles.tab,
-                  panelTab === "schema" && styles.tabActive,
-                )}
-                onClick={() => setPanelTab("schema")}
-              >
-                Schema
-                {issues.length > 0 && (
-                  <span
-                    className={styles.tabBadge}
-                    aria-label={`${issues.length} issues`}
-                  >
-                    {issues.length}
-                  </span>
-                )}
-              </button>
-            </div>
-            <div
-              className={styles.panelBody}
-              role="tabpanel"
-              id={panelTab === "field" ? "panel-field" : "panel-schema"}
-              aria-labelledby={
-                panelTab === "field" ? "tab-field" : "tab-schema"
-              }
-            >
-              {panelTab === "field" ? (
-                <PropertiesPanel
-                  field={selectedField}
-                  issues={selectedIssues}
-                  onChange={(patch) =>
-                    selectedField &&
-                    dispatch({
-                      type: "updateField",
-                      id: selectedField.id,
-                      patch,
-                    })
-                  }
-                  onSetOptions={(options) =>
-                    selectedField &&
-                    dispatch({
-                      type: "setOptions",
-                      id: selectedField.id,
-                      options,
-                    })
-                  }
-                  onDuplicate={() =>
-                    selectedField &&
-                    dispatch({ type: "duplicateField", id: selectedField.id })
-                  }
-                  onRemove={() =>
-                    selectedField &&
-                    dispatch({ type: "removeField", id: selectedField.id })
-                  }
-                />
-              ) : (
-                <SchemaOutput
-                  form={form}
-                  generated={generated}
-                  issues={issues}
-                  onSelectField={selectField}
-                />
+    <FieldTypesProvider registry={registry}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collisionDetection}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+        accessibility={{ announcements }}
+      >
+        <div className={styles.app}>
+          <header className={styles.topbar}>
+            <h1 className={styles.brand}>{title}</h1>
+            <span className={styles.meta}>
+              {form.fields.length}{" "}
+              {form.fields.length === 1 ? "field" : "fields"}
+            </span>
+            <div className={styles.topbarActions}>
+              {loadSample && (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={loadSample}
+                >
+                  Load sample
+                </button>
               )}
+              <button
+                type="button"
+                className="btn btn-sm btn-danger"
+                onClick={clearForm}
+                disabled={removableCount === 0}
+              >
+                <Icon name="trash" size={14} />
+                Clear
+              </button>
             </div>
-          </aside>
-        </div>
-      </div>
+          </header>
 
-      <DragOverlay dropAnimation={null}>
-        {activeDrag?.kind === "palette" && (
-          <PaletteItemGhost type={activeDrag.fieldType} />
-        )}
-        {activeDrag?.kind === "field" && (
-          <FieldCard field={activeDrag.field} className={styles.dragGhost} />
-        )}
-      </DragOverlay>
-    </DndContext>
+          <div className={styles.body}>
+            <aside className={styles.paletteColumn} aria-label="Field palette">
+              <Palette form={form} onAdd={(type) => addField(type)} />
+            </aside>
+
+            <main className={styles.canvasColumn}>
+              <Canvas
+                form={form}
+                selectedId={selectedId}
+                issues={issues}
+                dropIndicator={dropIndicator}
+                isPaletteDragging={activeDrag?.kind === "palette"}
+                onSelect={selectField}
+                onUpdateForm={(patch) =>
+                  dispatch({ type: "updateForm", patch })
+                }
+                onMove={(from, to) => dispatch({ type: "moveField", from, to })}
+                onDuplicate={(id) => dispatch({ type: "duplicateField", id })}
+                onRemove={(id) => dispatch({ type: "removeField", id })}
+                onLoadSample={loadSample}
+              />
+            </main>
+
+            <aside className={styles.sideColumn} aria-label="Inspector">
+              {showSchema && (
+                <div className={styles.tabs} role="tablist">
+                  <button
+                    type="button"
+                    role="tab"
+                    id="tab-field"
+                    aria-selected={activeTab === "field"}
+                    aria-controls="panel-field"
+                    className={cx(
+                      styles.tab,
+                      activeTab === "field" && styles.tabActive,
+                    )}
+                    onClick={() => setPanelTab("field")}
+                  >
+                    Field
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    id="tab-schema"
+                    aria-selected={activeTab === "schema"}
+                    aria-controls="panel-schema"
+                    className={cx(
+                      styles.tab,
+                      activeTab === "schema" && styles.tabActive,
+                    )}
+                    onClick={() => setPanelTab("schema")}
+                  >
+                    Schema
+                    {issues.length > 0 && (
+                      <span
+                        className={styles.tabBadge}
+                        aria-label={`${issues.length} issues`}
+                      >
+                        {issues.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+              <div
+                className={styles.panelBody}
+                role={showSchema ? "tabpanel" : undefined}
+                id={activeTab === "field" ? "panel-field" : "panel-schema"}
+                aria-labelledby={
+                  showSchema
+                    ? activeTab === "field"
+                      ? "tab-field"
+                      : "tab-schema"
+                    : undefined
+                }
+              >
+                {activeTab === "field" ? (
+                  <PropertiesPanel
+                    field={selectedField}
+                    issues={selectedIssues}
+                    canDuplicate={
+                      selectedField
+                        ? canAddField(registry, form, selectedField.type)
+                        : false
+                    }
+                    onChange={(patch) =>
+                      selectedField &&
+                      dispatch({
+                        type: "updateField",
+                        id: selectedField.id,
+                        patch,
+                      })
+                    }
+                    onDuplicate={() =>
+                      selectedField &&
+                      dispatch({ type: "duplicateField", id: selectedField.id })
+                    }
+                    onRemove={() =>
+                      selectedField &&
+                      dispatch({ type: "removeField", id: selectedField.id })
+                    }
+                  />
+                ) : (
+                  <SchemaOutput
+                    form={form}
+                    generated={generated}
+                    issues={issues}
+                    onSelectField={selectField}
+                  />
+                )}
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activeDrag?.kind === "palette" && (
+            <PaletteItemGhost type={activeDrag.fieldType} />
+          )}
+          {activeDrag?.kind === "field" && (
+            <FieldCard field={activeDrag.field} className={styles.dragGhost} />
+          )}
+        </DragOverlay>
+      </DndContext>
+    </FieldTypesProvider>
   )
 }

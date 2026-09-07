@@ -3,9 +3,11 @@ import { useDroppable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import type { FormDefinition } from "../model/types"
 import type { ValidationIssue } from "../model/validate"
+import { canAddField } from "../state/reducer"
 import { CanvasField, DropLine } from "./CanvasField"
 import { cx } from "./cx"
 import { CANVAS_ID, type DropIndicator } from "./dnd"
+import { useFieldTypes } from "./fieldTypesContext"
 import styles from "./Canvas.module.css"
 
 interface CanvasProps {
@@ -21,7 +23,7 @@ interface CanvasProps {
   onMove: (from: number, to: number) => void
   onDuplicate: (id: string) => void
   onRemove: (id: string) => void
-  onLoadSample: () => void
+  onLoadSample?: () => void
 }
 
 export function Canvas({
@@ -37,6 +39,7 @@ export function Canvas({
   onRemove,
   onLoadSample,
 }: CanvasProps) {
+  const registry = useFieldTypes()
   const { setNodeRef, isOver } = useDroppable({ id: CANVAS_ID })
 
   const issuesByField = useMemo(() => {
@@ -103,14 +106,19 @@ export function Canvas({
                   {isPaletteDragging ? "Drop it here" : "Your form is empty"}
                 </p>
                 <p className={styles.emptyHint}>
-                  Drag a field from the palette, click one to add it, or{" "}
-                  <button
-                    type="button"
-                    className={styles.linkButton}
-                    onClick={onLoadSample}
-                  >
-                    load a sample form
-                  </button>
+                  Drag a field from the palette or click one to add it
+                  {onLoadSample ? (
+                    <>
+                      , or{" "}
+                      <button
+                        type="button"
+                        className={styles.linkButton}
+                        onClick={onLoadSample}
+                      >
+                        load a sample form
+                      </button>
+                    </>
+                  ) : null}
                   .
                 </p>
               </div>
@@ -123,6 +131,7 @@ export function Canvas({
                     index={index}
                     count={form.fields.length}
                     selected={field.id === selectedId}
+                    canDuplicate={canAddField(registry, form, field.type)}
                     issues={issuesByField.get(field.id) ?? []}
                     indicator={indicatorFor(field.id)}
                     onSelect={onSelect}
