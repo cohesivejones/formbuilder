@@ -1,0 +1,111 @@
+.canvas {
+  min-height: 100%;
+  padding: 24px;
+}
+
+.sheet {
+  max-width: 760px;
+  margin: 0 auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.formHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 24px 28px 8px;
+}
+
+.titleInput,
+.descriptionInput {
+  width: 100%;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  resize: none;
+}
+
+.titleInput {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.descriptionInput {
+  color: var(--color-text-muted);
+}
+
+.titleInput:hover,
+.descriptionInput:hover {
+  border-color: var(--color-border);
+}
+
+.titleInput:focus,
+.descriptionInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+}
+
+.fieldList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 20px 40px;
+  border-radius: 0 0 12px 12px;
+  transition: background 120ms ease;
+}
+
+.fieldListTarget {
+  background: var(--color-surface-muted);
+}
+
+.fieldListOver {
+  background: var(--color-primary-soft);
+}
+
+.fieldListEmpty {
+  padding: 20px;
+}
+
+.emptyState {
+  padding: 40px 24px;
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.fieldListOver .emptyState {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.emptyTitle {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.fieldListOver .emptyTitle {
+  color: var(--color-primary);
+}
+
+.emptyHint {
+  margin: 0;
+}
+
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  text-decoration: underline;
+  font: inherit;
+}
