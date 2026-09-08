@@ -106,21 +106,58 @@ export function DateInput(props: FieldInputProps) {
 
 export function SelectInput(props: FieldInputProps) {
   const { field, value, onChange } = props
+  const control = controlProps(props)
+  const list = options(field)
   return (
-    <select
-      {...controlProps(props)}
-      value={asString(value)}
-      onChange={(event) => onChange(event.target.value || undefined)}
-    >
-      <option value="">
-        {asString(field.props.placeholder) || "Select an option"}
-      </option>
-      {options(field).map((option) => (
-        <option key={option.id} value={option.value}>
-          {option.label}
+    <>
+      <select
+        {...control}
+        className={cx(control.className, "screen-only")}
+        value={asString(value)}
+        onChange={(event) => onChange(event.target.value || undefined)}
+      >
+        <option value="">
+          {asString(field.props.placeholder) || "Select an option"}
         </option>
+        {list.map((option) => (
+          <option key={option.id} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {/*
+        A dropdown on paper would show only its current value, leaving nobody
+        anything to choose from. Printed, it becomes the same tick list a radio
+        group gets, with the chosen option marked.
+      */}
+      <PrintChoices options={list} selected={[asString(value)]} />
+    </>
+  )
+}
+
+/**
+ * The print-only rendering of a set of options. Marks are drawn as text so they
+ * survive with the browser's background graphics turned off.
+ */
+function PrintChoices({
+  options,
+  selected,
+}: {
+  options: FieldOption[]
+  selected: string[]
+}) {
+  if (options.length === 0) return null
+  return (
+    <ul className={cx(styles.printChoices, "print-only")} aria-hidden="true">
+      {options.map((option) => (
+        <li key={option.id} className={styles.printChoice}>
+          <span className={styles.printBox}>
+            {selected.includes(option.value) ? "\u2713" : ""}
+          </span>
+          <span>{option.label || option.value}</span>
+        </li>
       ))}
-    </select>
+    </ul>
   )
 }
 

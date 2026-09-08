@@ -38,3 +38,30 @@
   color: var(--color-text-muted);
   font-style: italic;
 }
+
+/* Print-only tick list, used where a control cannot be filled in by hand. */
+.printChoices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.printChoice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.printBox {
+  display: inline-block;
+  width: 4mm;
+  height: 4mm;
+  flex-shrink: 0;
+  border: 1px solid #333;
+  font-size: 3mm;
+  line-height: 4mm;
+  text-align: center;
+}

@@ -171,6 +171,14 @@ button:disabled {
   color: var(--color-danger);
 }
 
+/*
+ * Swap markup between screen and paper. A form printed as an offline fallback
+ * has to be fillable by hand, which some controls cannot manage as they stand.
+ */
+.print-only {
+  display: none;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -214,15 +222,34 @@ button:disabled {
     print-color-adjust: exact;
   }
 
+  .print-only {
+    display: revert;
+  }
+
+  .screen-only {
+    display: none !important;
+  }
+
   .control {
     background: #fff;
     border-color: #767676;
   }
 
-  /* A control the respondent left empty still needs somewhere to write. */
+  /* Room for handwriting, rather than the tighter spacing a pointer needs. */
   input.control,
   select.control {
-    min-height: 26px;
+    min-height: 9mm;
+  }
+
+  /* A hint that reads as an answer once it is on paper. The date field keeps
+     its own "dd/mm/yyyy", which is a format hint rather than an example. */
+  .control::placeholder {
+    color: transparent;
+  }
+
+  /* Nothing to click on paper. */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    display: none;
   }
 
   a[href]::after {

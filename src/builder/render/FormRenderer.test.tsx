@@ -298,6 +298,32 @@ describe("FormRenderer", () => {
     vi.unstubAllGlobals()
   })
 
+  it("gives a dropdown a printable tick list, since paper cannot be clicked", async () => {
+    const user = userEvent.setup()
+    const options = [
+      { id: "1", label: "Metro", value: "metro" },
+      { id: "2", label: "South West", value: "southWest" },
+    ]
+    const { container } = render(
+      <FormRenderer
+        form={form([field("select", "region", { label: "Region", options })])}
+      />,
+    )
+
+    // Hidden on screen, where the dropdown itself is the control.
+    const items = () => Array.from(container.querySelectorAll("li"))
+    expect(items().map((li) => li.textContent)).toEqual(["Metro", "South West"])
+    expect(container.querySelector(".print-only")).toBeInTheDocument()
+    expect(screen.getByLabelText("Region")).toHaveClass("screen-only")
+
+    // Choosing an option marks it, so a completed form prints the answer too.
+    await user.selectOptions(screen.getByLabelText("Region"), "southWest")
+    expect(items().map((li) => li.textContent)).toEqual([
+      "Metro",
+      "\u2713South West",
+    ])
+  })
+
   it("flags a field type it does not know rather than dropping it", () => {
     render(
       <FormRenderer

@@ -224,29 +224,42 @@ That is deliberate: revealing an error when a field loses focus grows the form
 at the moment of a click, and the button moving out from under the pointer
 swallows the press.
 
-### Printing and PDF
+### Printing, paper fallback and PDF
 
 The renderer carries a print stylesheet, so **Print** in the actions row (or
 Ctrl/Cmd+P) produces the form on its own: the demo nav, the definition sidebar
 and the buttons drop away, the page grows to its natural height instead of the
 fixed app shell, and no question is split across a page break. Every browser's
 print dialogue offers "Save as PDF", so that is the PDF path too, with nothing
-to install.
+to install. Pass `printable={false}` if the host supplies its own print control.
 
-The same markup covers both jobs. Print before answering for a blank form to
-complete by hand; print after answering for a record of what was submitted,
-with typed answers and ticked boxes intact. Pass `printable={false}` if the host
-supplies its own print control.
+The output is built to be **completed by hand**, for the case where a site keeps
+printed forms on file against a dropped connection. Print before answering for a
+blank form, or after answering for a record of what was submitted. Three things
+differ on paper:
 
-Two limits worth knowing. Ticked boxes and borders rely on the browser's
-"background graphics" option, which the stylesheet requests through
-`print-color-adjust` but a user can still turn off. And a dropdown prints only
-its current value, so a blank paper form gives no list to choose from; a radio
-group prints every option and suits paper better.
+- **A dropdown becomes a tick list of every option.** Printed as-is it would
+  show only its current value, leaving nobody anything to choose from. Whatever
+  is selected on screen is ticked, so a completed form still prints its answer.
+- **Placeholders are hidden.** On screen "Jane Citizen" is a hint; on paper it
+  reads as an answer somebody already wrote. A date field keeps its own
+  `dd/mm/yyyy`, which is a format hint rather than an example, and loses only
+  its calendar button.
+- **Boxes are sized for handwriting** rather than for a pointer.
+
+Chrome's print dialogue leaves "background graphics" off by default. Field
+borders, empty tick boxes and ticked controls all survive that, so a printed
+form is usable either way; the tick marks on a printed dropdown are drawn as
+text for the same reason. This was checked by generating PDFs both ways through
+headless Chromium.
 
 Generating PDFs unattended, on a server or without a person pressing Print, is a
-different job. That wants headless Chromium rendering this same page, or a PDF
-library building the document directly.
+different job. That wants headless Chromium rendering this same page, which the
+print stylesheet already makes straightforward.
+
+Filling forms offline in the browser, rather than on paper, is a different
+problem again: it needs the app installable and its submissions queued for
+later, not a print stylesheet.
 
 ## Restricting what an admin may do
 
