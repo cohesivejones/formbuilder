@@ -1,0 +1,40 @@
+.narrow {
+  max-width: 220px;
+}
+
+.invalid,
+.invalid:hover {
+  border-color: var(--color-danger);
+}
+
+.invalid:focus {
+  box-shadow: 0 0 0 3px var(--color-danger-soft);
+}
+
+.check {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.choice input {
+  margin: 0;
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-style: italic;
+}

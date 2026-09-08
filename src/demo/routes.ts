@@ -10,6 +10,11 @@ export const DEMO_ROUTES = [
     label: "Locked-down form",
     summary: "Wording, order and deletion only",
   },
+  {
+    path: "/renderer",
+    label: "Renderer",
+    summary: "Fill in a definition as a real form",
+  },
 ] as const
 
 export type DemoRoute = (typeof DEMO_ROUTES)[number]

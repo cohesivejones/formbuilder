@@ -44,6 +44,26 @@ export interface PreviewProps<P extends FieldProps = FieldProps> {
   field: FormField<P>
 }
 
+/**
+ * How the renderer associates a field's label with its control.
+ * - `control`: a `<label for>` above a single control (the default)
+ * - `inline`: the label sits beside the control, for a lone checkbox
+ * - `group`: a fieldset and legend, for a set of radios or checkboxes
+ */
+export type LabelMode = "control" | "inline" | "group"
+
+export interface FieldInputProps<P extends FieldProps = FieldProps> {
+  field: FormField<P>
+  /** The current answer. `undefined` until the respondent supplies one. */
+  value: unknown
+  onChange: (value: unknown) => void
+  /** Put this on the control so the rendered label points at it. */
+  id: string
+  /** Ids of the help text and error message, for `aria-describedby`. */
+  describedBy?: string
+  invalid: boolean
+}
+
 export interface PropertiesEditorProps<P extends FieldProps = FieldProps> {
   field: FormField<P>
   onChange: (props: Partial<P>) => void
@@ -87,6 +107,15 @@ export interface FieldTypeDefinition<P extends FieldProps = FieldProps> {
   toUiSchema?: (field: FormField<P>) => UiFieldSchema | undefined
   /** Read-only rendering of the field on the canvas. */
   Preview?: ComponentType<PreviewProps<P>>
+  /**
+   * The interactive control the renderer shows to a respondent. A type with no
+   * `Input` collects nothing, which is what `dataless` types want.
+   */
+  Input?: ComponentType<FieldInputProps<P>>
+  /** How the renderer labels the control. Defaults to `control`. */
+  labelMode?: LabelMode
+  /** The answer a blank form starts with. Defaults to `undefined`. */
+  initialValue?: (field: FormField<P>) => unknown
   /** Escape hatch for settings the declarative `properties` cannot express. */
   PropertiesEditor?: ComponentType<PropertiesEditorProps<P>>
   /** Extra validation. Return human-readable problems. */

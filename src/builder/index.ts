@@ -10,6 +10,8 @@ export {
   type PropertySpec,
   type PreviewProps,
   type PropertiesEditorProps,
+  type FieldInputProps,
+  type LabelMode,
 } from "./model/fieldType"
 export {
   effectiveLocks,
@@ -28,6 +30,14 @@ export type {
   FormField,
 } from "./model/types"
 export { validateForm, type ValidationIssue } from "./model/validate"
+export { readPersistedForm } from "./state/useFormBuilder"
+export { FormRenderer, type FormRendererProps } from "./render/FormRenderer"
+export {
+  createSubmissionValidator,
+  prune,
+  type SubmissionData,
+  type SubmissionErrors,
+} from "./render/validateSubmission"
 export { toJsonSchema } from "./schema/toJsonSchema"
 export type {
   GeneratedSchema,

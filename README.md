@@ -171,6 +171,57 @@ that the card preview reflects. The demo app registers it alongside the
 built-ins. A host maps `field.props.fieldType` to its own storage shape the way
 `formioMapping.ts` does today.
 
+## Rendering a form
+
+`FormRenderer` turns a definition into a working form. Answers are validated
+against the JSON Schema generated from that same definition, so respondents are
+held to exactly what the schema describes rather than a parallel set of rules.
+
+```tsx
+import { FormRenderer } from "./builder"
+
+;<FormRenderer
+  form={definition}
+  fieldTypes={fieldTypes} // must cover every type the form uses
+  onSubmit={(answers) => save(answers)}
+  submitLabel="Send feedback"
+/>
+```
+
+`onSubmit` receives the answers with blanks removed, so an untouched field is
+absent rather than an empty string. The shape matches the emitted schema, which
+means the same document can validate the submission again server-side.
+
+A field type supplies its control through `Input`, the counterpart to the
+builder's `Preview`:
+
+```tsx
+Input: ({ field, value, onChange, id, describedBy, invalid }) => (
+  <input
+    id={id}
+    className="control"
+    value={typeof value === "string" ? value : ""}
+    aria-describedby={describedBy}
+    aria-invalid={invalid || undefined}
+    onChange={(event) => onChange(event.target.value)}
+  />
+),
+labelMode: "control",
+```
+
+The renderer owns the label, help text and error message and passes the `id` and
+`describedBy` that tie them together, so an `Input` renders only the control.
+`labelMode` says how to label it: `control` puts a `<label for>` above (the
+default), `inline` places it beside a lone checkbox, and `group` wraps a set of
+radios or checkboxes in a fieldset and legend. A type with no `Input` collects
+nothing and renders its `Preview` instead, which is how a `dataless` placeholder
+explains itself to a respondent.
+
+Errors stay hidden until the first submit, then update live as each is fixed.
+That is deliberate: revealing an error when a field loses focus grows the form
+at the moment of a click, and the button moving out from under the pointer
+swallows the press.
+
 ## Restricting what an admin may do
 
 A Builder instance can be narrowed with `permissions`. Everything is allowed by
@@ -297,6 +348,7 @@ src/
     DemoNav.tsx                   Route switcher
     FullBuilderPage.tsx           Unrestricted builder
     LockedDownFormPage.tsx        Restricted builder, host-owned state
+    RendererPage.tsx              Paste a definition and fill it in
   examples/
     programQuestionSlot.tsx       A host-defined field type
     lockedDownForm.ts             A fixed form with pinned fields
@@ -312,6 +364,10 @@ src/
       sample.ts                   Example form
     fieldTypes/
       builtIns.tsx                The nine standard definitions
+      inputs.tsx                  Their interactive controls, for the renderer
+    render/
+      FormRenderer.tsx            A definition rendered as a working form
+      validateSubmission.ts       Answers checked against the emitted schema
     schema/
       jsonSchemaTypes.ts          The JSON Schema subset we emit
       helpers.ts                  Spread helpers for writing mappers
@@ -336,7 +392,9 @@ so dropping in empty space appends.
 
 Pure logic (schema conversion, reducer, validation, registry, key slugging) is
 unit tested, including compiling the generated schema with Ajv in strict 2020-12
-mode and validating sample data against it. The `Builder` component is tested
+mode and validating sample data against it. The renderer is tested through
+filling in every built-in type, the errors each constraint produces, and the
+answers it finally submits. The `Builder` component is tested
 with Testing Library through click-to-add, editing, reordering, option editing,
 custom types, locks, permissions and controlled mode. Pointer drag-and-drop is
 not exercised in jsdom.
@@ -349,3 +407,4 @@ not exercised in jsdom.
 - Static content blocks (headings, paragraphs) as dataless types, sections or pages
 - Conditional visibility (`if`/`then` or `dependencies`)
 - Undo/redo
+- A live preview pane in the builder, reusing `FormRenderer`

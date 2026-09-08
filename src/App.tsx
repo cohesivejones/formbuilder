@@ -2,6 +2,7 @@ import { Redirect, Route, Switch } from "wouter"
 import { DemoNav } from "./demo/DemoNav"
 import { FullBuilderPage } from "./demo/FullBuilderPage"
 import { LockedDownFormPage } from "./demo/LockedDownFormPage"
+import { RendererPage } from "./demo/RendererPage"
 import styles from "./App.module.css"
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
         <Switch>
           <Route path="/" component={FullBuilderPage} />
           <Route path="/locked-down" component={LockedDownFormPage} />
+          <Route path="/renderer" component={RendererPage} />
           <Route>
             <Redirect to="/" />
           </Route>

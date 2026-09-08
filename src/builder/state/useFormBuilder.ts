@@ -155,6 +155,14 @@ export function useFormBuilder({
   }
 }
 
+/**
+ * The form the builder last persisted, if any. Exposed so another view can pick
+ * up where the builder left off.
+ */
+export function readPersistedForm(): FormDefinition | undefined {
+  return loadForm()
+}
+
 function loadForm(): FormDefinition | undefined {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)

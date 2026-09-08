@@ -11,6 +11,17 @@ import {
   validPattern,
 } from "../schema/helpers"
 import { ChoiceListPreview } from "./ChoiceListPreview"
+import {
+  CheckboxGroupInput,
+  CheckboxInput,
+  DateInput,
+  EmailInput,
+  NumberInput,
+  RadioInput,
+  SelectInput,
+  TextInput,
+  TextareaInput,
+} from "./inputs"
 import styles from "./previews.module.css"
 
 /**
@@ -124,6 +135,7 @@ export const text = defineFieldType<TextProps>({
       disabled
     />
   ),
+  Input: TextInput,
 })
 
 export const textarea = defineFieldType<TextareaProps>({
@@ -160,6 +172,7 @@ export const textarea = defineFieldType<TextareaProps>({
       disabled
     />
   ),
+  Input: TextareaInput,
 })
 
 export const email = defineFieldType<EmailProps>({
@@ -179,6 +192,7 @@ export const email = defineFieldType<EmailProps>({
       disabled
     />
   ),
+  Input: EmailInput,
 })
 
 export const number = defineFieldType<NumberProps>({
@@ -225,6 +239,7 @@ export const number = defineFieldType<NumberProps>({
       disabled
     />
   ),
+  Input: NumberInput,
 })
 
 export const date = defineFieldType<DateProps>({
@@ -237,6 +252,7 @@ export const date = defineFieldType<DateProps>({
   Preview: () => (
     <input className={cx(inputClass, styles.narrow)} type="date" disabled />
   ),
+  Input: DateInput,
 })
 
 export const checkbox = defineFieldType<CheckboxProps>({
@@ -268,6 +284,9 @@ export const checkbox = defineFieldType<CheckboxProps>({
       <span>{field.label || "Checkbox"}</span>
     </label>
   ),
+  Input: CheckboxInput,
+  labelMode: "inline",
+  initialValue: ({ props }) => props.defaultChecked === true || undefined,
 })
 
 const optionsSpec = {
@@ -317,6 +336,8 @@ export const checkboxGroup = defineFieldType<CheckboxGroupProps>({
   Preview: ({ field }) => (
     <ChoiceListPreview options={field.props.options ?? []} kind="checkbox" />
   ),
+  Input: CheckboxGroupInput,
+  labelMode: "group",
 })
 
 export const radio = defineFieldType<ChoiceProps>({
@@ -334,6 +355,8 @@ export const radio = defineFieldType<ChoiceProps>({
   Preview: ({ field }) => (
     <ChoiceListPreview options={field.props.options ?? []} kind="radio" />
   ),
+  Input: RadioInput,
+  labelMode: "group",
 })
 
 export const select = defineFieldType<SelectProps>({
@@ -358,6 +381,7 @@ export const select = defineFieldType<SelectProps>({
       ))}
     </select>
   ),
+  Input: SelectInput,
 })
 
 /** All built-in types, in palette order. */
