@@ -2,6 +2,7 @@ import type { ReactNode, SVGProps } from "react"
 
 export type IconName =
   | "grip"
+  | "lock"
   | "trash"
   | "copy"
   | "up"
@@ -32,6 +33,12 @@ const glyphs: Record<IconName, ReactNode> = {
       <circle cx="15" cy="12" r="1.6" />
       <circle cx="15" cy="19" r="1.6" />
     </g>
+  ),
+  lock: (
+    <>
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </>
   ),
   trash: (
     <>

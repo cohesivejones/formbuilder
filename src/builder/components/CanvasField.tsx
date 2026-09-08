@@ -74,7 +74,15 @@ export function CanvasField({
         issues={issues}
         onSelect={() => onSelect(field.id)}
         handle={
-          locks.reorder ? undefined : (
+          locks.reorder ? (
+            <span
+              className={cx("icon-btn", styles.pinned)}
+              title="Pinned in place"
+              aria-hidden="true"
+            >
+              <Icon name="lock" size={14} />
+            </span>
+          ) : (
             <button
               type="button"
               ref={setActivatorNodeRef}

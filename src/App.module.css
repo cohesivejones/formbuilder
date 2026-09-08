@@ -1,0 +1,9 @@
+.shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+}
+
+.page {
+  min-height: 0;
+}

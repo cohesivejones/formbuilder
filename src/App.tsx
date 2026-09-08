@@ -1,39 +1,24 @@
-import { Builder } from "./builder"
-import { builtInFieldTypes } from "./builder/fieldTypes/builtIns"
-import { createSampleForm } from "./builder/model/sample"
-import { programQuestionSlot } from "./examples/programQuestionSlot"
-
-// The demo host: every built-in type plus one custom, dataless, single-instance
-// type modelled on the feedback platform's program-question slot.
-const fieldTypes = [...builtInFieldTypes, programQuestionSlot]
-
-// A locked-down instance for one fixed form: an admin may reword fields,
-// reorder them and delete them, and nothing else. Open with ?mode=restricted.
-const WORDING_ONLY = {
-  addFields: false,
-  editKeys: false,
-  editProps: false,
-  editRequired: false,
-  editFormMeta: false,
-}
+import { Redirect, Route, Switch } from "wouter"
+import { DemoNav } from "./demo/DemoNav"
+import { FullBuilderPage } from "./demo/FullBuilderPage"
+import { LockedDownFormPage } from "./demo/LockedDownFormPage"
+import styles from "./App.module.css"
 
 function App() {
-  const restricted =
-    new URLSearchParams(window.location.search).get("mode") === "restricted"
-
-  if (restricted) {
-    return (
-      <Builder
-        fieldTypes={fieldTypes}
-        defaultValue={createSampleForm()}
-        permissions={WORDING_ONLY}
-        showSchema={false}
-        title="Edit form wording"
-      />
-    )
-  }
-
-  return <Builder fieldTypes={fieldTypes} persist sample={createSampleForm} />
+  return (
+    <div className={styles.shell}>
+      <DemoNav />
+      <div className={styles.page}>
+        <Switch>
+          <Route path="/" component={FullBuilderPage} />
+          <Route path="/locked-down" component={LockedDownFormPage} />
+          <Route>
+            <Redirect to="/" />
+          </Route>
+        </Switch>
+      </div>
+    </div>
+  )
 }
 
 export default App

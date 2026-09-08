@@ -177,3 +177,9 @@
   font-style: italic;
   font-size: 13px;
 }
+
+.pinned {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  cursor: default;
+}

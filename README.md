@@ -18,6 +18,13 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
+The demo has two routes:
+
+| Route          | What it shows                                              |
+| -------------- | ---------------------------------------------------------- |
+| `/`            | The full builder, every capability enabled                 |
+| `/locked-down` | One fixed form an admin may only reword, reorder and prune |
+
 Other scripts:
 
 | Script               | What it does                          |
@@ -216,7 +223,10 @@ Two rules govern the result:
   handles at all, while one pinned field among many shows a "Locked" badge and
   greyed controls against its editable siblings.
 
-Try it in the demo with `?mode=restricted`.
+The demo has a worked example at `/locked-down`: a fixed client feedback form
+whose three outcome questions are pinned because their keys anchor a downstream
+export, while the program question slot and the free-text comment stay movable
+and removable. See [lockedDownForm.ts](src/examples/lockedDownForm.ts).
 
 ## Supported field types
 
@@ -282,9 +292,14 @@ Notes on the mapping:
 
 ```
 src/
-  App.tsx                         Demo host: built-ins + the program question slot
+  App.tsx                         Demo routes
+  demo/
+    DemoNav.tsx                   Route switcher
+    FullBuilderPage.tsx           Unrestricted builder
+    LockedDownFormPage.tsx        Restricted builder, host-owned state
   examples/
     programQuestionSlot.tsx       A host-defined field type
+    lockedDownForm.ts             A fixed form with pinned fields
   builder/
     index.ts                      Public surface for hosts
     model/
