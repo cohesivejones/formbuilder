@@ -121,3 +121,13 @@
     grid-template-columns: 200px minmax(0, 1fr) 340px;
   }
 }
+
+.bodyWithoutPalette {
+  grid-template-columns: minmax(0, 1fr) 400px;
+}
+
+@media (max-width: 1100px) {
+  .bodyWithoutPalette {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}

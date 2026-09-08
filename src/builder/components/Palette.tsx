@@ -4,7 +4,7 @@ import type { FormDefinition } from "../model/types"
 import { canAddField } from "../state/reducer"
 import { cx } from "./cx"
 import { paletteId, type DragData } from "./dnd"
-import { useFieldTypes } from "./fieldTypesContext"
+import { useBuilderContext } from "./builderContext"
 import styles from "./Palette.module.css"
 
 const HINT_ID = "palette-hint"
@@ -15,7 +15,7 @@ interface PaletteProps {
 }
 
 export function Palette({ form, onAdd }: PaletteProps) {
-  const registry = useFieldTypes()
+  const { registry, permissions } = useBuilderContext()
   return (
     <div className={styles.palette}>
       <h2 className={styles.heading}>Fields</h2>
@@ -28,7 +28,9 @@ export function Palette({ form, onAdd }: PaletteProps) {
           <li key={definition.type}>
             <PaletteItem
               definition={definition}
-              disabled={!canAddField(registry, form, definition.type)}
+              disabled={
+                !canAddField(registry, form, definition.type, permissions)
+              }
               onAdd={onAdd}
             />
           </li>
@@ -107,7 +109,7 @@ export function PaletteItemContent({
 
 /** Rendered inside the DragOverlay while a palette item is being dragged. */
 export function PaletteItemGhost({ type }: { type: string }) {
-  const registry = useFieldTypes()
+  const { registry } = useBuilderContext()
   return (
     <div className={cx(styles.item, styles.itemGhost)}>
       <PaletteItemContent definition={registry.resolve(type)} />

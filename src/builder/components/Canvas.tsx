@@ -7,7 +7,7 @@ import { canAddField } from "../state/reducer"
 import { CanvasField, DropLine } from "./CanvasField"
 import { cx } from "./cx"
 import { CANVAS_ID, type DropIndicator } from "./dnd"
-import { useFieldTypes } from "./fieldTypesContext"
+import { useBuilderContext } from "./builderContext"
 import styles from "./Canvas.module.css"
 
 interface CanvasProps {
@@ -39,7 +39,7 @@ export function Canvas({
   onRemove,
   onLoadSample,
 }: CanvasProps) {
-  const registry = useFieldTypes()
+  const { registry, permissions } = useBuilderContext()
   const { setNodeRef, isOver } = useDroppable({ id: CANVAS_ID })
 
   const issuesByField = useMemo(() => {
@@ -72,6 +72,7 @@ export function Canvas({
             value={form.title}
             placeholder="Form title"
             aria-label="Form title"
+            readOnly={!permissions.editFormMeta}
             onChange={(event) => onUpdateForm({ title: event.target.value })}
           />
           <textarea
@@ -80,6 +81,7 @@ export function Canvas({
             rows={2}
             placeholder="Add a description (optional)"
             aria-label="Form description"
+            readOnly={!permissions.editFormMeta}
             onChange={(event) =>
               onUpdateForm({ description: event.target.value })
             }
@@ -106,7 +108,9 @@ export function Canvas({
                   {isPaletteDragging ? "Drop it here" : "Your form is empty"}
                 </p>
                 <p className={styles.emptyHint}>
-                  Drag a field from the palette or click one to add it
+                  {permissions.addFields
+                    ? "Drag a field from the palette or click one to add it"
+                    : "This form has no fields"}
                   {onLoadSample ? (
                     <>
                       , or{" "}
@@ -131,7 +135,12 @@ export function Canvas({
                     index={index}
                     count={form.fields.length}
                     selected={field.id === selectedId}
-                    canDuplicate={canAddField(registry, form, field.type)}
+                    canDuplicate={canAddField(
+                      registry,
+                      form,
+                      field.type,
+                      permissions,
+                    )}
                     issues={issuesByField.get(field.id) ?? []}
                     indicator={indicatorFor(field.id)}
                     onSelect={onSelect}

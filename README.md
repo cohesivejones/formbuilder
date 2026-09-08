@@ -75,6 +75,7 @@ function FeedbackFormEditor({ form, onChange }) {
 | `defaultValue` | Initial form when uncontrolled.                                    |
 | `onChange`     | Receives the full `FormDefinition` after every change.             |
 | `persist`      | Uncontrolled only: keep the form in `localStorage`.                |
+| `permissions`  | What the admin may do. See "Restricting what an admin may do".     |
 | `showSchema`   | Show the JSON Schema output tab. Default `true`.                   |
 | `sample`       | Function returning a form; enables the "Load sample" action.       |
 | `title`        | Top bar heading.                                                   |
@@ -163,6 +164,60 @@ that the card preview reflects. The demo app registers it alongside the
 built-ins. A host maps `field.props.fieldType` to its own storage shape the way
 `formioMapping.ts` does today.
 
+## Restricting what an admin may do
+
+A Builder instance can be narrowed with `permissions`. Everything is allowed by
+default, so an unrestricted builder needs no configuration.
+
+```tsx
+// One fixed form: reword fields, reorder them, delete them, nothing else.
+<Builder
+  value={form}
+  onChange={save}
+  showSchema={false}
+  permissions={{
+    addFields: false,
+    editKeys: false,
+    editProps: false,
+    editRequired: false,
+    editFormMeta: false,
+    // editLabels, reorderFields and removeFields stay on by default
+  }}
+/>
+```
+
+| Permission      | Governs                                        |
+| --------------- | ---------------------------------------------- |
+| `addFields`     | The palette, duplicating, and loading a sample |
+| `removeFields`  | Deleting a field and clearing the form         |
+| `reorderFields` | Dragging and the move up/down actions          |
+| `editLabels`    | Field labels and help text                     |
+| `editKeys`      | The JSON Schema key                            |
+| `editProps`     | Type-specific settings                         |
+| `editRequired`  | The required flag                              |
+| `editFormMeta`  | The form's own title and description           |
+
+Per-field `locks` narrow things further for individual fields, using the same
+names plus `remove` and `reorder`. The more restrictive of the two always wins,
+so a host can permit deletion generally and still pin one field:
+
+```ts
+{ id: "…", key: "serviceListened", label: "The service listened to me",
+  locks: { remove: true, key: true, reorder: true } }
+```
+
+Two rules govern the result:
+
+- **Enforcement is in the reducer, not the UI.** Disabled controls are
+  presentation; the reducer refuses the action regardless of how it is
+  dispatched. Your server-side policy remains the real backstop.
+- **A capability the whole form forbids is hidden; a capability only one field
+  forbids is shown disabled.** So an admin who can never reorder sees no drag
+  handles at all, while one pinned field among many shows a "Locked" badge and
+  greyed controls against its editable siblings.
+
+Try it in the demo with `?mode=restricted`.
+
 ## Supported field types
 
 | Palette item   | JSON Schema                                                             | UI schema                                |
@@ -236,6 +291,7 @@ src/
       types.ts                    FormDefinition, FormField, FieldLocks
       fieldType.ts                FieldTypeDefinition, PropertySpec, defineFieldType
       registry.ts                 FieldTypeRegistry with unknown-type placeholders
+      permissions.ts              Form-wide capabilities resolved against field locks
       keys.ts                     Label → key slugging, uniqueness, ids
       validate.ts                 Issues that would make the output wrong
       sample.ts                   Example form
@@ -246,7 +302,7 @@ src/
       helpers.ts                  Spread helpers for writing mappers
       toJsonSchema.ts             FormDefinition + registry → { schema, uiSchema }
     state/
-      reducer.ts                  All builder actions, locks and instance limits
+      reducer.ts                  All builder actions; enforces permissions and locks
       useFormBuilder.ts           Controlled/uncontrolled state + derived data
     components/
       Builder.tsx                 Layout, DndContext wiring, host props
@@ -267,8 +323,8 @@ Pure logic (schema conversion, reducer, validation, registry, key slugging) is
 unit tested, including compiling the generated schema with Ajv in strict 2020-12
 mode and validating sample data against it. The `Builder` component is tested
 with Testing Library through click-to-add, editing, reordering, option editing,
-custom types, locks and controlled mode. Pointer drag-and-drop is not exercised
-in jsdom.
+custom types, locks, permissions and controlled mode. Pointer drag-and-drop is
+not exercised in jsdom.
 
 ## Ideas for the next cut
 

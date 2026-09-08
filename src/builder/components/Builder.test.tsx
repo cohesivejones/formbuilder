@@ -313,4 +313,147 @@ describe("Builder", () => {
       )
     })
   })
+
+  describe("permissions", () => {
+    // The scenario a host wants for one fixed form: reword, reorder, delete.
+    const wordingOnly = {
+      addFields: false,
+      editKeys: false,
+      editProps: false,
+      editRequired: false,
+      editFormMeta: false,
+    }
+
+    function twoFieldForm(): FormDefinition {
+      return {
+        title: "Client feedback",
+        description: "",
+        fields: [
+          field("text", "name", { label: "Your name", required: true }),
+          field("textarea", "comments", { label: "Comments" }),
+        ],
+      }
+    }
+
+    it("hides the palette and every add or duplicate action", () => {
+      render(
+        <Builder defaultValue={twoFieldForm()} permissions={wordingOnly} />,
+      )
+
+      expect(
+        screen.queryByRole("complementary", { name: "Field palette" }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole("button", { name: /^Add / }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole("button", { name: /^Duplicate / }),
+      ).not.toBeInTheDocument()
+    })
+
+    it("keeps reordering and deleting available", async () => {
+      const user = userEvent.setup()
+      render(
+        <Builder
+          defaultValue={twoFieldForm()}
+          permissions={wordingOnly}
+          showSchema={false}
+        />,
+      )
+
+      await user.click(screen.getByRole("button", { name: "Move Comments up" }))
+      expect(
+        screen.getAllByTestId(/^canvas-field-/).map((el) => el.dataset.testid),
+      ).toEqual(["canvas-field-comments", "canvas-field-name"])
+
+      await user.click(screen.getByRole("button", { name: "Delete Your name" }))
+      expect(screen.queryByTestId("canvas-field-name")).not.toBeInTheDocument()
+    })
+
+    it("allows rewording but freezes the key, settings and required flag", async () => {
+      const user = userEvent.setup()
+      render(
+        <Builder defaultValue={twoFieldForm()} permissions={wordingOnly} />,
+      )
+
+      await user.click(screen.getByRole("button", { name: "Edit Your name" }))
+
+      const label = screen.getByLabelText("Label")
+      await user.clear(label)
+      await user.type(label, "Full name")
+      expect(
+        screen.getByRole("button", { name: "Edit Full name" }),
+      ).toBeInTheDocument()
+
+      // Settings the admin can never change are gone from the panel; the key
+      // is still visible on the canvas card, which is where identity lives.
+      expect(screen.queryByLabelText("Key")).not.toBeInTheDocument()
+      expect(screen.queryByLabelText("Required")).not.toBeInTheDocument()
+      expect(screen.queryByLabelText("Min length")).not.toBeInTheDocument()
+      expect(
+        within(screen.getByTestId("canvas-field-name")).getByText("name"),
+      ).toBeInTheDocument()
+    })
+
+    it("makes the form title and description read-only", async () => {
+      const user = userEvent.setup()
+      render(
+        <Builder defaultValue={twoFieldForm()} permissions={wordingOnly} />,
+      )
+
+      const title = screen.getByLabelText("Form title")
+      expect(title).toHaveAttribute("readonly")
+      await user.type(title, "xyz")
+      expect(title).toHaveValue("Client feedback")
+    })
+
+    it("hides reorder and delete controls when those are withheld", () => {
+      render(
+        <Builder
+          defaultValue={twoFieldForm()}
+          permissions={{ reorderFields: false, removeFields: false }}
+        />,
+      )
+      expect(
+        screen.queryByRole("button", { name: /^Move / }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole("button", { name: /^Drag to reorder/ }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole("button", { name: /^Delete / }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole("button", { name: "Clear" }),
+      ).not.toBeInTheDocument()
+    })
+
+    it("pins one field while the rest of the form stays editable", async () => {
+      const user = userEvent.setup()
+      const form: FormDefinition = {
+        title: "t",
+        description: "",
+        fields: [
+          field("text", "dexId", {
+            label: "Anchored",
+            locks: { remove: true, reorder: true },
+          }),
+          field("text", "free", { label: "Free" }),
+        ],
+      }
+      render(<Builder defaultValue={form} />)
+
+      expect(
+        screen.queryByRole("button", { name: "Move Anchored down" }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.getByRole("button", { name: "Anchored cannot be deleted" }),
+      ).toBeDisabled()
+
+      // The unpinned field keeps its full set of controls.
+      expect(screen.getByRole("button", { name: "Move Free up" })).toBeEnabled()
+      await user.click(screen.getByRole("button", { name: "Delete Free" }))
+      expect(screen.queryByTestId("canvas-field-free")).not.toBeInTheDocument()
+    })
+  })
 })

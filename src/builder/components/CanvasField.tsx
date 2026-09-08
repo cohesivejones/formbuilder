@@ -1,11 +1,12 @@
 import type { ReactNode } from "react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { effectiveLocks, type ResolvedLocks } from "../model/permissions"
 import type { FormField } from "../model/types"
 import type { ValidationIssue } from "../model/validate"
 import { cx } from "./cx"
 import type { DragData } from "./dnd"
-import { useFieldTypes } from "./fieldTypesContext"
+import { useBuilderContext } from "./builderContext"
 import { Icon } from "./Icon"
 import styles from "./CanvasField.module.css"
 
@@ -36,6 +37,8 @@ export function CanvasField({
   onDuplicate,
   onRemove,
 }: CanvasFieldProps) {
+  const { permissions } = useBuilderContext()
+  const locks = effectiveLocks(field, permissions)
   const data: DragData = { kind: "field" }
   const {
     attributes,
@@ -45,7 +48,7 @@ export function CanvasField({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: field.id, data })
+  } = useSortable({ id: field.id, data, disabled: locks.reorder })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -56,8 +59,6 @@ export function CanvasField({
     event.stopPropagation()
     handler()
   }
-
-  const removable = !field.locks?.remove
 
   return (
     <div
@@ -73,65 +74,88 @@ export function CanvasField({
         issues={issues}
         onSelect={() => onSelect(field.id)}
         handle={
-          <button
-            type="button"
-            ref={setActivatorNodeRef}
-            className={cx("icon-btn", styles.handle)}
-            aria-label={`Drag to reorder ${field.label}`}
-            {...attributes}
-            {...listeners}
-          >
-            <Icon name="grip" />
-          </button>
+          locks.reorder ? undefined : (
+            <button
+              type="button"
+              ref={setActivatorNodeRef}
+              className={cx("icon-btn", styles.handle)}
+              aria-label={`Drag to reorder ${field.label}`}
+              {...attributes}
+              {...listeners}
+            >
+              <Icon name="grip" />
+            </button>
+          )
         }
         actions={
           <>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={`Move ${field.label} up`}
-              disabled={index === 0}
-              onClick={stop(() => onMove(index, index - 1))}
-            >
-              <Icon name="up" />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={`Move ${field.label} down`}
-              disabled={index === count - 1}
-              onClick={stop(() => onMove(index, index + 1))}
-            >
-              <Icon name="down" />
-            </button>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label={`Duplicate ${field.label}`}
-              disabled={!canDuplicate}
-              onClick={stop(() => onDuplicate(field.id))}
-            >
-              <Icon name="copy" />
-            </button>
-            <button
-              type="button"
-              className="icon-btn icon-btn-danger"
-              aria-label={
-                removable
-                  ? `Delete ${field.label}`
-                  : `${field.label} cannot be deleted`
-              }
-              title={removable ? undefined : "This field is locked"}
-              disabled={!removable}
-              onClick={stop(() => onRemove(field.id))}
-            >
-              <Icon name="trash" />
-            </button>
+            {!locks.reorder && (
+              <>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={`Move ${field.label} up`}
+                  disabled={index === 0}
+                  onClick={stop(() => onMove(index, index - 1))}
+                >
+                  <Icon name="up" />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={`Move ${field.label} down`}
+                  disabled={index === count - 1}
+                  onClick={stop(() => onMove(index, index + 1))}
+                >
+                  <Icon name="down" />
+                </button>
+              </>
+            )}
+            {permissions.addFields && (
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={`Duplicate ${field.label}`}
+                disabled={!canDuplicate}
+                onClick={stop(() => onDuplicate(field.id))}
+              >
+                <Icon name="copy" />
+              </button>
+            )}
+            {permissions.removeFields && (
+              <button
+                type="button"
+                className="icon-btn icon-btn-danger"
+                aria-label={
+                  locks.remove
+                    ? `${field.label} cannot be deleted`
+                    : `Delete ${field.label}`
+                }
+                title={locks.remove ? "This field is locked" : undefined}
+                disabled={locks.remove}
+                onClick={stop(() => onRemove(field.id))}
+              >
+                <Icon name="trash" />
+              </button>
+            )}
           </>
         }
       />
       {indicator === "after" && <DropLine />}
     </div>
+  )
+}
+
+/** True when the field itself is restricted beyond ordinary editing. */
+function isPinned(locks: Partial<ResolvedLocks> | undefined): boolean {
+  return Boolean(
+    locks &&
+    (locks.label ||
+      locks.key ||
+      locks.props ||
+      locks.required ||
+      locks.remove ||
+      locks.reorder),
   )
 }
 
@@ -162,11 +186,14 @@ export function FieldCard({
   onSelect,
   className,
 }: FieldCardProps) {
-  const registry = useFieldTypes()
+  const { registry, permissions } = useBuilderContext()
   const definition = registry.resolve(field.type)
   const Preview = definition.Preview
   const hasIssues = issues.length > 0
-  const locked = Boolean(field.locks?.remove || field.locks?.key)
+  // Only a field the host singled out is badged. When a capability is off for
+  // the whole form, every card would carry the badge and it would say nothing.
+  const locked =
+    isPinned(field.locks) && isPinned(effectiveLocks(field, permissions))
 
   return (
     <div

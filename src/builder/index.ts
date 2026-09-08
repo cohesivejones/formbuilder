@@ -11,6 +11,14 @@ export {
   type PreviewProps,
   type PropertiesEditorProps,
 } from "./model/fieldType"
+export {
+  effectiveLocks,
+  resolvePermissions,
+  FULL_PERMISSIONS,
+  type BuilderPermissions,
+  type ResolvedPermissions,
+  type ResolvedLocks,
+} from "./model/permissions"
 export { createRegistry, FieldTypeRegistry } from "./model/registry"
 export type {
   FieldLocks,

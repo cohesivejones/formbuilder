@@ -21,14 +21,18 @@ export interface FieldOption {
  * an admin may reword the label but must not remove or re-key the field.
  */
 export interface FieldLocks {
-  /** The field cannot be deleted. */
-  remove?: boolean
+  /** The label and help text cannot be changed. */
+  label?: boolean
   /** The key cannot be changed and no longer follows the label. */
   key?: boolean
   /** Type-specific properties cannot be changed. */
   props?: boolean
   /** The required flag cannot be changed. */
   required?: boolean
+  /** The field cannot be deleted. */
+  remove?: boolean
+  /** The field cannot be moved. Other fields may still move around it. */
+  reorder?: boolean
 }
 
 export interface FormField<P extends FieldProps = FieldProps> {

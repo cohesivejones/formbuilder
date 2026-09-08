@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { builtInFieldTypes } from "../fieldTypes/builtIns"
 import { createField, defineFieldType } from "../model/fieldType"
+import { resolvePermissions } from "../model/permissions"
 import { createRegistry } from "../model/registry"
 import type { FieldOption } from "../model/types"
 import { field, testRegistry } from "../../test/fields"
@@ -304,5 +305,133 @@ describe("builderReducer", () => {
         label: "Still here",
       })
     })
+  })
+})
+
+describe("builderReducer permissions", () => {
+  const restricted = createBuilderReducer(
+    testRegistry,
+    resolvePermissions({
+      addFields: false,
+      editKeys: false,
+      editProps: false,
+      editRequired: false,
+      editFormMeta: false,
+    }),
+  )
+
+  function twoFields(): BuilderState {
+    return {
+      form: {
+        title: "Fixed title",
+        description: "",
+        fields: [
+          field("text", "name", { label: "Name", required: true }),
+          field("email", "email", { label: "Email" }),
+        ],
+      },
+      selectedId: null,
+    }
+  }
+
+  it("refuses to add or duplicate fields", () => {
+    const start = twoFields()
+    expect(restricted(start, { type: "addField", fieldType: "text" })).toBe(
+      start,
+    )
+    expect(
+      restricted(start, {
+        type: "duplicateField",
+        id: start.form.fields[0].id,
+      }),
+    ).toBe(start)
+  })
+
+  it("refuses to change the form's own title and description", () => {
+    const start = twoFields()
+    expect(
+      restricted(start, { type: "updateForm", patch: { title: "New" } }),
+    ).toBe(start)
+  })
+
+  it("allows label and help text edits without letting the key follow", () => {
+    const start = twoFields()
+    const id = start.form.fields[0].id
+    const state = restricted(start, {
+      type: "updateField",
+      id,
+      patch: { label: "Full name", description: "As it appears on your ID" },
+    })
+    expect(state.form.fields[0]).toMatchObject({
+      label: "Full name",
+      description: "As it appears on your ID",
+      key: "name",
+    })
+  })
+
+  it("refuses key, props and required edits", () => {
+    const start = twoFields()
+    const id = start.form.fields[0].id
+    const state = restricted(start, {
+      type: "updateField",
+      id,
+      patch: { key: "other", required: false, props: { minLength: 3 } },
+    })
+    expect(state.form.fields[0]).toMatchObject({ key: "name", required: true })
+    expect(state.form.fields[0].props).toEqual(start.form.fields[0].props)
+  })
+
+  it("still allows reordering and deleting", () => {
+    let state = restricted(twoFields(), { type: "moveField", from: 0, to: 1 })
+    expect(state.form.fields.map((f) => f.key)).toEqual(["email", "name"])
+    state = restricted(state, {
+      type: "removeField",
+      id: state.form.fields[0].id,
+    })
+    expect(state.form.fields.map((f) => f.key)).toEqual(["name"])
+  })
+
+  it("refuses to reorder, delete or clear when those are withheld", () => {
+    const frozen = createBuilderReducer(
+      testRegistry,
+      resolvePermissions({ reorderFields: false, removeFields: false }),
+    )
+    const start = twoFields()
+    expect(frozen(start, { type: "moveField", from: 0, to: 1 })).toBe(start)
+    expect(
+      frozen(start, { type: "removeField", id: start.form.fields[0].id }),
+    ).toBe(start)
+    expect(frozen(start, { type: "clearForm" })).toBe(start)
+  })
+
+  it("pins one field without freezing the rest of the form", () => {
+    const pinned = field("text", "dexId", { locks: { reorder: true } })
+    const start: BuilderState = {
+      form: {
+        title: "t",
+        description: "",
+        fields: [pinned, field("text", "a"), field("text", "b")],
+      },
+      selectedId: null,
+    }
+    expect(reducer(start, { type: "moveField", from: 0, to: 2 })).toBe(start)
+    const moved = reducer(start, { type: "moveField", from: 1, to: 2 })
+    expect(moved.form.fields.map((f) => f.key)).toEqual(["dexId", "b", "a"])
+  })
+
+  it("keeps host-pinned fields when the form is cleared", () => {
+    const start: BuilderState = {
+      form: {
+        title: "t",
+        description: "",
+        fields: [
+          field("text", "keep", { locks: { remove: true } }),
+          field("text", "go"),
+        ],
+      },
+      selectedId: null,
+    }
+    const state = reducer(start, { type: "clearForm" })
+    expect(state.form.fields.map((f) => f.key)).toEqual(["keep"])
   })
 })

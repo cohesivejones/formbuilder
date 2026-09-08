@@ -19,6 +19,7 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable"
 import { builtInFieldTypes } from "../fieldTypes/builtIns"
 import type { FieldTypeDefinition } from "../model/fieldType"
+import { effectiveLocks, type BuilderPermissions } from "../model/permissions"
 import { createRegistry } from "../model/registry"
 import type { FormDefinition } from "../model/types"
 import { canAddField } from "../state/reducer"
@@ -33,7 +34,7 @@ import {
   type ActiveDrag,
   type DropIndicator,
 } from "./dnd"
-import { FieldTypesProvider } from "./FieldTypesProvider"
+import { BuilderProvider } from "./BuilderProvider"
 import { Icon } from "./Icon"
 import { Palette, PaletteItemGhost } from "./Palette"
 import { PropertiesPanel } from "./PropertiesPanel"
@@ -77,6 +78,11 @@ export interface BuilderProps {
   onChange?: (form: FormDefinition) => void
   /** Uncontrolled only: keep the form in localStorage across reloads. */
   persist?: boolean
+  /**
+   * What the admin may do in this instance. Everything is allowed by default.
+   * Restrictions are enforced in the reducer, not only by hiding controls.
+   */
+  permissions?: BuilderPermissions
   /** Show the JSON Schema output tab. Hosts with their own storage shape can hide it. */
   showSchema?: boolean
   /** Enables the "Load sample" action, producing a form to start from. */
@@ -91,13 +97,28 @@ export function Builder({
   defaultValue,
   onChange,
   persist = false,
+  permissions: requestedPermissions,
   showSchema = true,
   sample,
   title = "Form Builder",
 }: BuilderProps) {
   const registry = useMemo(() => createRegistry(fieldTypes), [fieldTypes])
-  const { form, selectedId, selectedField, dispatch, issues, generated } =
-    useFormBuilder({ registry, value, defaultValue, onChange, persist })
+  const {
+    form,
+    selectedId,
+    selectedField,
+    dispatch,
+    issues,
+    generated,
+    permissions,
+  } = useFormBuilder({
+    registry,
+    value,
+    defaultValue,
+    onChange,
+    persist,
+    permissions: requestedPermissions,
+  })
 
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null)
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null)
@@ -123,7 +144,7 @@ export function Builder({
 
   const addField = useCallback(
     (fieldType: string, index?: number) => {
-      if (!canAddField(registry, form, fieldType)) return
+      if (!canAddField(registry, form, fieldType, permissions)) return
       const selectedIndex = form.fields.findIndex((f) => f.id === selectedId)
       dispatch({
         type: "addField",
@@ -132,7 +153,7 @@ export function Builder({
       })
       setPanelTab("field")
     },
-    [dispatch, form, registry, selectedId],
+    [dispatch, form, permissions, registry, selectedId],
   )
 
   const handleDragStart = ({ active }: DragStartEvent) => {
@@ -207,7 +228,9 @@ export function Builder({
     }
   }, [form.fields, registry])
 
-  const removableCount = form.fields.filter((f) => !f.locks?.remove).length
+  const removableCount = form.fields.filter(
+    (f) => !effectiveLocks(f, permissions).remove,
+  ).length
 
   const clearForm = () => {
     if (removableCount === 0) return
@@ -216,16 +239,17 @@ export function Builder({
     }
   }
 
-  const loadSample = sample
-    ? () => dispatch({ type: "replaceForm", form: sample() })
-    : undefined
+  const loadSample =
+    sample && permissions.addFields
+      ? () => dispatch({ type: "replaceForm", form: sample() })
+      : undefined
 
   const selectedIssues = selectedField
     ? issues.filter((i) => i.fieldId === selectedField.id)
     : []
 
   return (
-    <FieldTypesProvider registry={registry}>
+    <BuilderProvider registry={registry} permissions={permissions}>
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
@@ -252,22 +276,34 @@ export function Builder({
                   Load sample
                 </button>
               )}
-              <button
-                type="button"
-                className="btn btn-sm btn-danger"
-                onClick={clearForm}
-                disabled={removableCount === 0}
-              >
-                <Icon name="trash" size={14} />
-                Clear
-              </button>
+              {permissions.removeFields && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={clearForm}
+                  disabled={removableCount === 0}
+                >
+                  <Icon name="trash" size={14} />
+                  Clear
+                </button>
+              )}
             </div>
           </header>
 
-          <div className={styles.body}>
-            <aside className={styles.paletteColumn} aria-label="Field palette">
-              <Palette form={form} onAdd={(type) => addField(type)} />
-            </aside>
+          <div
+            className={cx(
+              styles.body,
+              !permissions.addFields && styles.bodyWithoutPalette,
+            )}
+          >
+            {permissions.addFields && (
+              <aside
+                className={styles.paletteColumn}
+                aria-label="Field palette"
+              >
+                <Palette form={form} onAdd={(type) => addField(type)} />
+              </aside>
+            )}
 
             <main className={styles.canvasColumn}>
               <Canvas
@@ -346,7 +382,12 @@ export function Builder({
                     issues={selectedIssues}
                     canDuplicate={
                       selectedField
-                        ? canAddField(registry, form, selectedField.type)
+                        ? canAddField(
+                            registry,
+                            form,
+                            selectedField.type,
+                            permissions,
+                          )
                         : false
                     }
                     onChange={(patch) =>
@@ -388,6 +429,6 @@ export function Builder({
           )}
         </DragOverlay>
       </DndContext>
-    </FieldTypesProvider>
+    </BuilderProvider>
   )
 }

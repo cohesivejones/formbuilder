@@ -1,11 +1,12 @@
 import { useId, type ReactNode } from "react"
 import { baseProperties, type PropertySpec } from "../model/fieldType"
+import { effectiveLocks } from "../model/permissions"
 import { isValidKey, slugifyKey } from "../model/keys"
 import type { FieldOption, FieldProps, FormField } from "../model/types"
 import type { ValidationIssue } from "../model/validate"
 import type { FieldPatch } from "../state/reducer"
 import { cx } from "./cx"
-import { useFieldTypes } from "./fieldTypesContext"
+import { useBuilderContext } from "./builderContext"
 import { Icon } from "./Icon"
 import { OptionsEditor } from "./OptionsEditor"
 import styles from "./PropertiesPanel.module.css"
@@ -34,7 +35,7 @@ export function PropertiesPanel({
   onDuplicate,
   onRemove,
 }: PropertiesPanelProps) {
-  const registry = useFieldTypes()
+  const { registry, permissions } = useBuilderContext()
 
   if (!field) {
     return (
@@ -46,11 +47,22 @@ export function PropertiesPanel({
 
   const definition = registry.resolve(field.type)
   const base = baseProperties(definition)
-  const locks = field.locks ?? {}
-  const showKey = !definition.dataless
-  const showGeneral = base.size > 0 || showKey
-  const sections = groupBySection(definition.properties ?? [])
-  const Editor = definition.PropertiesEditor
+  const locks = effectiveLocks(field, permissions)
+
+  // A control the whole form forbids is dropped, since the canvas card already
+  // shows what the field is. A control only this field forbids stays visible
+  // but disabled, so the admin can see it is protected while its siblings
+  // are not.
+  const showLabel = base.has("label") && permissions.editLabels
+  const showDescription = base.has("description") && permissions.editLabels
+  const showRequired = base.has("required") && permissions.editRequired
+  const showKey = !definition.dataless && permissions.editKeys
+  const showGeneral = showLabel || showDescription || showRequired || showKey
+  const sections = permissions.editProps
+    ? groupBySection(definition.properties ?? [])
+    : []
+  const Editor = permissions.editProps ? definition.PropertiesEditor : undefined
+  const readOnly = !showGeneral && sections.length === 0 && Editor === undefined
 
   const setProp = (name: string, value: unknown) =>
     onChange({ props: { [name]: value } })
@@ -62,7 +74,7 @@ export function PropertiesPanel({
           <span className={styles.typeIcon}>{definition.icon}</span>
           {definition.label}
         </span>
-        {(locks.remove || locks.key || locks.props) && (
+        {(field.locks?.remove || field.locks?.key || field.locks?.props) && (
           <span
             className={styles.lockNote}
             title="Some settings are fixed by the host application"
@@ -83,37 +95,39 @@ export function PropertiesPanel({
         </ul>
       )}
 
+      {readOnly && (
+        <p className={styles.help}>This field has no editable settings.</p>
+      )}
+
       {showGeneral && (
         <Section title="General">
-          {base.has("label") && (
+          {showLabel && (
             <TextRow
               label="Label"
               value={field.label}
+              disabled={locks.label}
               onChange={(label) => onChange({ label })}
               autoFocus
             />
           )}
           {showKey && (
-            <KeyRow
-              field={field}
-              locked={Boolean(locks.key)}
-              onChange={onChange}
-            />
+            <KeyRow field={field} locked={locks.key} onChange={onChange} />
           )}
-          {base.has("description") && (
+          {showDescription && (
             <TextRow
               label="Help text"
               value={field.description ?? ""}
               placeholder="Shown under the label"
+              disabled={locks.label}
               onChange={(description) => onChange({ description })}
               multiline
             />
           )}
-          {base.has("required") && (
+          {showRequired && (
             <CheckRow
               label="Required"
               checked={field.required}
-              disabled={Boolean(locks.required)}
+              disabled={locks.required}
               onChange={(required) => onChange({ required })}
             />
           )}
@@ -122,7 +136,7 @@ export function PropertiesPanel({
 
       {sections.map(([title, specs]) => (
         <Section key={title} title={title}>
-          {renderSpecs(specs, field.props, Boolean(locks.props), setProp)}
+          {renderSpecs(specs, field.props, locks.props, setProp)}
         </Section>
       ))}
 
@@ -130,33 +144,39 @@ export function PropertiesPanel({
         <Section title="More settings">
           <Editor
             field={field}
-            disabled={Boolean(locks.props)}
+            disabled={locks.props}
             onChange={(props) => onChange({ props })}
           />
         </Section>
       )}
 
-      <div className={styles.footer}>
-        <button
-          type="button"
-          className="btn btn-sm"
-          onClick={onDuplicate}
-          disabled={!canDuplicate}
-        >
-          <Icon name="copy" size={14} />
-          Duplicate
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm btn-danger"
-          onClick={onRemove}
-          disabled={Boolean(locks.remove)}
-          title={locks.remove ? "This field is locked" : undefined}
-        >
-          <Icon name="trash" size={14} />
-          Delete field
-        </button>
-      </div>
+      {(permissions.addFields || permissions.removeFields) && (
+        <div className={styles.footer}>
+          {permissions.addFields && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={onDuplicate}
+              disabled={!canDuplicate}
+            >
+              <Icon name="copy" size={14} />
+              Duplicate
+            </button>
+          )}
+          {permissions.removeFields && (
+            <button
+              type="button"
+              className="btn btn-sm btn-danger"
+              onClick={onRemove}
+              disabled={locks.remove}
+              title={locks.remove ? "This field is locked" : undefined}
+            >
+              <Icon name="trash" size={14} />
+              Delete field
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

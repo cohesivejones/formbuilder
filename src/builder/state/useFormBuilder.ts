@@ -6,6 +6,11 @@ import {
   useRef,
   useState,
 } from "react"
+import {
+  resolvePermissions,
+  type BuilderPermissions,
+  type ResolvedPermissions,
+} from "../model/permissions"
 import type { FieldTypeRegistry } from "../model/registry"
 import type { FormDefinition, FormField } from "../model/types"
 import { validateForm } from "../model/validate"
@@ -23,6 +28,8 @@ export interface UseFormBuilderOptions {
   onChange?: (form: FormDefinition) => void
   /** Uncontrolled mode only: keep the form in localStorage across reloads. */
   persist?: boolean
+  /** What the admin may do. Everything is allowed by default. */
+  permissions?: BuilderPermissions
 }
 
 /**
@@ -36,8 +43,46 @@ export function useFormBuilder({
   defaultValue,
   onChange,
   persist = false,
+  permissions: rawPermissions,
 }: UseFormBuilderOptions) {
   const controlled = value !== undefined
+
+  // Destructured so the resolved object is stable when the host passes a fresh
+  // object literal each render, which would otherwise rebuild the reducer.
+  const {
+    addFields = true,
+    removeFields = true,
+    reorderFields = true,
+    editLabels = true,
+    editKeys = true,
+    editProps = true,
+    editRequired = true,
+    editFormMeta = true,
+  } = rawPermissions ?? {}
+
+  const permissions = useMemo<ResolvedPermissions>(
+    () =>
+      resolvePermissions({
+        addFields,
+        removeFields,
+        reorderFields,
+        editLabels,
+        editKeys,
+        editProps,
+        editRequired,
+        editFormMeta,
+      }),
+    [
+      addFields,
+      removeFields,
+      reorderFields,
+      editLabels,
+      editKeys,
+      editProps,
+      editRequired,
+      editFormMeta,
+    ],
+  )
 
   const [internalForm, setInternalForm] = useState<FormDefinition>(
     () => (persist ? loadForm() : undefined) ?? defaultValue ?? emptyForm(),
@@ -50,7 +95,10 @@ export function useFormBuilder({
       ? rawSelectedId
       : null
 
-  const reducer = useMemo(() => createBuilderReducer(registry), [registry])
+  const reducer = useMemo(
+    () => createBuilderReducer(registry, permissions),
+    [registry, permissions],
+  )
 
   // Latest values for dispatch, so several dispatches in one tick compose
   // correctly and the controlled value is always the base for the next change.
@@ -96,7 +144,15 @@ export function useFormBuilder({
     [form, registry],
   )
 
-  return { form, selectedId, selectedField, dispatch, issues, generated }
+  return {
+    form,
+    selectedId,
+    selectedField,
+    dispatch,
+    issues,
+    generated,
+    permissions,
+  }
 }
 
 function loadForm(): FormDefinition | undefined {

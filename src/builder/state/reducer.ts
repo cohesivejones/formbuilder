@@ -1,6 +1,11 @@
 import { arrayMove } from "@dnd-kit/sortable"
 import { createField, type FieldTypeDefinition } from "../model/fieldType"
 import { newId, slugifyKey, uniqueKey } from "../model/keys"
+import {
+  effectiveLocks,
+  FULL_PERMISSIONS,
+  type ResolvedPermissions,
+} from "../model/permissions"
 import type { FieldTypeRegistry } from "../model/registry"
 import type {
   FieldOption,
@@ -56,12 +61,17 @@ export function initialState(form: FormDefinition = emptyForm()): BuilderState {
   return { form, selectedId: null }
 }
 
-/** Whether another field of `type` may be added, honouring `maxInstances`. */
+/**
+ * Whether another field of `type` may be added, honouring both the form-wide
+ * `addFields` permission and the type's own `maxInstances`.
+ */
 export function canAddField(
   registry: FieldTypeRegistry,
   form: FormDefinition,
   type: string,
+  permissions: ResolvedPermissions = FULL_PERMISSIONS,
 ): boolean {
+  if (!permissions.addFields) return false
   const definition = registry.get(type)
   if (!definition) return false
   if (definition.maxInstances === undefined) return true
@@ -70,11 +80,13 @@ export function canAddField(
 }
 
 /**
- * Builds the reducer for a given registry. The registry is needed to create
- * fields with the right defaults and to enforce per-type rules.
+ * Builds the reducer for a registry and a permission set. Every restriction is
+ * enforced here rather than only in the UI, so a stray dispatch cannot bypass
+ * the host's policy; disabled controls are presentation on top of this.
  */
 export function createBuilderReducer(
   registry: FieldTypeRegistry,
+  permissions: ResolvedPermissions = FULL_PERMISSIONS,
 ): BuilderReducer {
   return function builderReducer(state, action): BuilderState {
     switch (action.type) {
@@ -82,7 +94,7 @@ export function createBuilderReducer(
         const definition = registry.get(action.fieldType)
         if (
           !definition ||
-          !canAddField(registry, state.form, action.fieldType)
+          !canAddField(registry, state.form, action.fieldType, permissions)
         ) {
           return state
         }
@@ -98,7 +110,7 @@ export function createBuilderReducer(
 
       case "removeField": {
         const field = state.form.fields.find((f) => f.id === action.id)
-        if (!field || field.locks?.remove) return state
+        if (!field || effectiveLocks(field, permissions).remove) return state
         const fields = state.form.fields.filter((f) => f.id !== action.id)
         return {
           form: { ...state.form, fields },
@@ -110,7 +122,8 @@ export function createBuilderReducer(
         const index = state.form.fields.findIndex((f) => f.id === action.id)
         if (index === -1) return state
         const source = state.form.fields[index]
-        if (!canAddField(registry, state.form, source.type)) return state
+        if (!canAddField(registry, state.form, source.type, permissions))
+          return state
 
         const definition = registry.resolve(source.type)
         const { locks, ...rest } = source
@@ -130,9 +143,13 @@ export function createBuilderReducer(
 
       case "moveField": {
         const { fields } = state.form
+        if (fields.length === 0) return state
         const from = clampIndex(action.from, fields.length - 1)
         const to = clampIndex(action.to, fields.length - 1)
-        if (from === to || fields.length === 0) return state
+        if (from === to) return state
+        // A field pinned in place cannot be dragged; others may still move
+        // around it, which is what reordering the rest of the form requires.
+        if (effectiveLocks(fields[from], permissions).reorder) return state
         return {
           ...state,
           form: { ...state.form, fields: arrayMove(fields, from, to) },
@@ -142,13 +159,20 @@ export function createBuilderReducer(
       case "updateField": {
         const fields = state.form.fields.map((field) =>
           field.id === action.id
-            ? applyPatch(field, action.patch, state.form.fields, registry)
+            ? applyPatch(
+                field,
+                action.patch,
+                state.form.fields,
+                registry,
+                permissions,
+              )
             : field,
         )
         return { ...state, form: { ...state.form, fields } }
       }
 
       case "updateForm":
+        if (!permissions.editFormMeta) return state
         return { ...state, form: { ...state.form, ...action.patch } }
 
       case "selectField":
@@ -160,8 +184,12 @@ export function createBuilderReducer(
         return { form: action.form, selectedId: null }
 
       case "clearForm": {
-        // Locked fields survive a clear; everything else goes.
-        const fields = state.form.fields.filter((f) => f.locks?.remove)
+        if (!permissions.removeFields) return state
+        // Fields the host has pinned survive a clear; everything else goes.
+        const fields = state.form.fields.filter(
+          (f) => effectiveLocks(f, permissions).remove,
+        )
+        if (fields.length === state.form.fields.length) return state
         return { form: { ...state.form, fields }, selectedId: null }
       }
     }
@@ -173,14 +201,16 @@ function applyPatch(
   patch: FieldPatch,
   allFields: FormField[],
   registry: FieldTypeRegistry,
+  permissions: ResolvedPermissions,
 ): FormField {
   const definition = registry.resolve(field.type)
-  const locks = field.locks ?? {}
+  const locks = effectiveLocks(field, permissions)
   const next: FormField = { ...field }
 
-  if (patch.label !== undefined) next.label = patch.label
+  const wording = patch.label !== undefined && !locks.label
+  if (wording) next.label = patch.label as string
 
-  if (patch.description !== undefined) {
+  if (patch.description !== undefined && !locks.label) {
     next.description = patch.description === "" ? undefined : patch.description
   }
 
@@ -192,9 +222,9 @@ function applyPatch(
   if (patch.key !== undefined && keyEditable) {
     next.key = patch.key
     next.autoKey = patch.autoKey ?? false
-  } else if (patch.label !== undefined && keyEditable && field.autoKey) {
+  } else if (wording && keyEditable && field.autoKey) {
     const others = allFields.filter((f) => f.id !== field.id).map((f) => f.key)
-    next.key = uniqueKey(slugifyKey(patch.label), others)
+    next.key = uniqueKey(slugifyKey(patch.label as string), others)
   }
 
   if (patch.props && !locks.props) {
