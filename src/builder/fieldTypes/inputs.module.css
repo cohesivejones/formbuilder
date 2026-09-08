@@ -39,18 +39,17 @@
   font-style: italic;
 }
 
-/* Print-only tick list, used where a control cannot be filled in by hand. */
+/*
+ * A tick list standing in for a control that cannot be filled in by hand.
+ * It belongs to paper only, and the swap lives here rather than in a global
+ * utility: this file is bundled after the global sheet, so a rule here would
+ * win regardless of what that utility said.
+ */
 .printChoices {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  display: none;
 }
 
 .printChoice {
-  display: flex;
   align-items: center;
   gap: 8px;
 }
@@ -64,4 +63,24 @@
   font-size: 3mm;
   line-height: 4mm;
   text-align: center;
+}
+
+@media print {
+  .printChoices {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .printChoice {
+    display: flex;
+  }
+
+  /* The real control has no use on paper. */
+  .screenOnly {
+    display: none;
+  }
 }

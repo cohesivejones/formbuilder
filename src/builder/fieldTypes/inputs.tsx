@@ -112,7 +112,7 @@ export function SelectInput(props: FieldInputProps) {
     <>
       <select
         {...control}
-        className={cx(control.className, "screen-only")}
+        className={cx(control.className, styles.screenOnly)}
         value={asString(value)}
         onChange={(event) => onChange(event.target.value || undefined)}
       >
@@ -148,7 +148,7 @@ function PrintChoices({
 }) {
   if (options.length === 0) return null
   return (
-    <ul className={cx(styles.printChoices, "print-only")} aria-hidden="true">
+    <ul className={styles.printChoices} aria-hidden="true">
       {options.map((option) => (
         <li key={option.id} className={styles.printChoice}>
           <span className={styles.printBox}>

@@ -171,14 +171,6 @@ button:disabled {
   color: var(--color-danger);
 }
 
-/*
- * Swap markup between screen and paper. A form printed as an offline fallback
- * has to be fillable by hand, which some controls cannot manage as they stand.
- */
-.print-only {
-  display: none;
-}
-
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -220,14 +212,6 @@ button:disabled {
   *::after {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-  }
-
-  .print-only {
-    display: revert;
-  }
-
-  .screen-only {
-    display: none !important;
   }
 
   .control {

@@ -310,11 +310,13 @@ describe("FormRenderer", () => {
       />,
     )
 
-    // Hidden on screen, where the dropdown itself is the control.
+    // The list is in the markup but belongs to print; that it is actually
+    // hidden on screen is a question of applied CSS, so it is asserted in the
+    // browser check rather than here.
     const items = () => Array.from(container.querySelectorAll("li"))
     expect(items().map((li) => li.textContent)).toEqual(["Metro", "South West"])
-    expect(container.querySelector(".print-only")).toBeInTheDocument()
-    expect(screen.getByLabelText("Region")).toHaveClass("screen-only")
+    expect(container.querySelector("ul")).toHaveClass("printChoices")
+    expect(screen.getByLabelText("Region")).toHaveClass("screenOnly")
 
     // Choosing an option marks it, so a completed form prints the answer too.
     await user.selectOptions(screen.getByLabelText("Region"), "southWest")
