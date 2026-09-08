@@ -275,6 +275,29 @@ describe("FormRenderer", () => {
     expect(onSubmit).toHaveBeenCalledWith({ name: "Ada" })
   })
 
+  it("offers printing, and lets a host turn it off", async () => {
+    const user = userEvent.setup()
+    const print = vi.fn()
+    vi.stubGlobal("print", print)
+
+    const { rerender } = render(
+      <FormRenderer form={form([field("text", "name", { label: "Name" })])} />,
+    )
+    await user.click(screen.getByRole("button", { name: "Print" }))
+    expect(print).toHaveBeenCalled()
+
+    rerender(
+      <FormRenderer
+        form={form([field("text", "name", { label: "Name" })])}
+        printable={false}
+      />,
+    )
+    expect(
+      screen.queryByRole("button", { name: "Print" }),
+    ).not.toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
   it("flags a field type it does not know rather than dropping it", () => {
     render(
       <FormRenderer

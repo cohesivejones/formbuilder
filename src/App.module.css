@@ -7,3 +7,10 @@
 .page {
   min-height: 0;
 }
+
+@media print {
+  .shell {
+    display: block;
+    height: auto;
+  }
+}

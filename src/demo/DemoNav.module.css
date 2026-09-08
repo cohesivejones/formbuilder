@@ -57,3 +57,9 @@
 .linkActive .summary {
   color: #b7c6dc;
 }
+
+@media print {
+  .nav {
+    display: none;
+  }
+}

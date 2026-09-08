@@ -188,6 +188,8 @@ import { FormRenderer } from "./builder"
 />
 ```
 
+`printable` adds a Print action, described under printing and PDF below.
+
 `onSubmit` receives the answers with blanks removed, so an untouched field is
 absent rather than an empty string. The shape matches the emitted schema, which
 means the same document can validate the submission again server-side.
@@ -221,6 +223,30 @@ Errors stay hidden until the first submit, then update live as each is fixed.
 That is deliberate: revealing an error when a field loses focus grows the form
 at the moment of a click, and the button moving out from under the pointer
 swallows the press.
+
+### Printing and PDF
+
+The renderer carries a print stylesheet, so **Print** in the actions row (or
+Ctrl/Cmd+P) produces the form on its own: the demo nav, the definition sidebar
+and the buttons drop away, the page grows to its natural height instead of the
+fixed app shell, and no question is split across a page break. Every browser's
+print dialogue offers "Save as PDF", so that is the PDF path too, with nothing
+to install.
+
+The same markup covers both jobs. Print before answering for a blank form to
+complete by hand; print after answering for a record of what was submitted,
+with typed answers and ticked boxes intact. Pass `printable={false}` if the host
+supplies its own print control.
+
+Two limits worth knowing. Ticked boxes and borders rely on the browser's
+"background graphics" option, which the stylesheet requests through
+`print-color-adjust` but a user can still turn off. And a dropdown prints only
+its current value, so a blank paper form gives no list to choose from; a radio
+group prints every option and suits paper better.
+
+Generating PDFs unattended, on a server or without a person pressing Print, is a
+different job. That wants headless Chromium rendering this same page, or a PDF
+library building the document directly.
 
 ## Restricting what an admin may do
 
@@ -408,3 +434,4 @@ not exercised in jsdom.
 - Conditional visibility (`if`/`then` or `dependencies`)
 - Undo/redo
 - A live preview pane in the builder, reusing `FormRenderer`
+- Server-side PDF generation for unattended exports

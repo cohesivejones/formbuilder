@@ -130,3 +130,30 @@
 .summaryField {
   font-weight: 600;
 }
+
+@media print {
+  .form {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    gap: 16px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Buttons cannot be pressed on paper, and the summary describes the screen. */
+  .actions,
+  .summary {
+    display: none;
+  }
+
+  /* Never split a question across a page break. */
+  .field {
+    break-inside: avoid;
+  }
+
+  .title {
+    font-size: 16pt;
+  }
+}

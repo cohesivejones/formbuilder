@@ -28,6 +28,12 @@ export interface FormRendererProps {
   /** Called with the pruned answers once they satisfy the generated schema. */
   onSubmit?: (data: SubmissionData) => void
   submitLabel?: string
+  /**
+   * Offer a Print action, which is also how every browser saves a PDF. Prints
+   * the form alone: blank if untouched, filled in if answered. Turn it off when
+   * the host provides its own print control.
+   */
+  printable?: boolean
 }
 
 /**
@@ -43,6 +49,7 @@ export function FormRenderer({
   fieldTypes = builtInFieldTypes,
   onSubmit,
   submitLabel = "Submit",
+  printable = true,
 }: FormRendererProps) {
   const registry = useMemo(() => createRegistry(fieldTypes), [fieldTypes])
   const [values, setValues] = useState<SubmissionData>(() =>
@@ -156,6 +163,15 @@ export function FormRenderer({
           <button type="button" className="btn" onClick={reset}>
             Reset
           </button>
+          {printable && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => window.print()}
+            >
+              Print
+            </button>
+          )}
           {submitted && (
             <span className={styles.submitted} role="status">
               Submitted

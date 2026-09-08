@@ -110,3 +110,20 @@
     grid-template-columns: 320px minmax(0, 1fr);
   }
 }
+
+/* On paper only the form matters: the definition and its controls are tools. */
+@media print {
+  .page {
+    display: block;
+    height: auto;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .preview {
+    padding: 0;
+    overflow: visible;
+  }
+}
