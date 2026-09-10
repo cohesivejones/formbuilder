@@ -23,6 +23,14 @@ export interface JsonSchema {
   default?: unknown
   const?: unknown
   oneOf?: JsonSchema[]
+  anyOf?: JsonSchema[]
+  allOf?: JsonSchema[]
+  not?: JsonSchema
+  if?: JsonSchema
+  then?: JsonSchema
+  exclusiveMinimum?: number
+  exclusiveMaximum?: number
+  contains?: JsonSchema
   items?: JsonSchema
   uniqueItems?: boolean
   minItems?: number
@@ -36,6 +44,11 @@ export interface JsonSchema {
  * from any renderer.
  */
 export interface UiFieldSchema {
+  /**
+   * Our extension: the field's visibility condition with field keys in place
+   * of internal ids, for renderers that honour it. Not an RJSF convention.
+   */
+  "ui:visibleWhen"?: unknown
   "ui:widget"?:
     "textarea" | "radio" | "checkboxes" | "select" | "date" | "email"
   "ui:placeholder"?: string

@@ -7,6 +7,8 @@
  * the builder knowing about them.
  */
 
+import type { Condition } from "../conditions/model"
+
 export type FieldProps = Record<string, unknown>
 
 export interface FieldOption {
@@ -53,6 +55,13 @@ export interface FormField<P extends FieldProps = FieldProps> {
   label: string
   description?: string
   required: boolean
+  /**
+   * Shown only while this holds against the other answers. A hidden field is
+   * never required and its answer is left out of validation and submission.
+   */
+  visibleWhen?: Condition
+  /** Required only while this holds. `required` is the unconditional form. */
+  requiredWhen?: Condition
   /** Type-specific settings, shaped by the field type's `defaults` and `properties`. */
   props: P
   locks?: FieldLocks

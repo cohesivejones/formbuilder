@@ -15,6 +15,11 @@ export const DEMO_ROUTES = [
     label: "Renderer",
     summary: "Fill in a definition as a real form",
   },
+  {
+    path: "/conditions",
+    label: "Conditional logic",
+    summary: "Answers show, hide and require fields",
+  },
 ] as const
 
 export type DemoRoute = (typeof DEMO_ROUTES)[number]

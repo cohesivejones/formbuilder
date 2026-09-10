@@ -102,6 +102,8 @@ interface FormField {
   description?: string
   required: boolean
   props: Record<string, unknown>
+  visibleWhen?: Condition // shown only while this holds — see conditional logic
+  requiredWhen?: Condition // an answer demanded only while this holds
   locks?: {
     remove?: boolean
     key?: boolean
@@ -261,6 +263,51 @@ Filling forms offline in the browser, rather than on paper, is a different
 problem again: it needs the app installable and its submissions queued for
 later, not a print stylesheet.
 
+## Conditional logic
+
+A field can carry two rules: `visibleWhen` and `requiredWhen`. Rules are stored
+as small expression trees referencing other fields by their stable internal id,
+never as code, so nothing is evaluated with `eval`, the same rule runs on a
+CSP-locked kiosk or a server, and the builder can reason about rules — flagging
+one that refers to a deleted field, or a set of visibility rules that form a
+loop.
+
+Admins author rules in an expression language, edited per field under
+**Conditions** in the inspector:
+
+```
+contactMethod = 'phone'
+hasAllergies = true and householdSize >= 3
+services contains 'other'
+not (region is empty)
+```
+
+Comparisons are `=`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `is empty` and
+`is not empty`, combined with `and`, `or`, `not` and parentheses; values are
+quoted strings, numbers, `true` or `false`. Fields are referred to by key, and a
+typo earns a suggestion. The text is parsed into the tree on every keystroke and
+never stored: renaming a field later breaks nothing, and the box re-displays the
+rule with current keys.
+
+The semantics are the ones that keep data honest:
+
+- A hidden field keeps its answer on screen, so toggling a checkbox twice loses
+  nothing, but the answer takes no part in validation and never leaves the form
+  in a submission.
+- A hidden field is never required, whatever its other settings say.
+- Visibility cascades: if X shows Y and Y shows Z, hiding X takes Z down too,
+  because rules are evaluated only against the answers of visible fields.
+- On paper, where nothing can react, every question prints — hidden ones under
+  an italic "Only if:" note stating when they apply.
+
+Requiredness rides the exported JSON Schema as `if`/`then` clauses with
+visibility folded in, so the renderer's Ajv path and any server enforce the
+same conditions from the same document, with no knowledge of the rule language.
+Visibility itself is presentation and travels in the UI schema as
+`ui:visibleWhen`, the condition tree with keys in place of ids. One deliberate
+limit: comparisons are always against literal values, never between two fields,
+which is exactly the subset JSON Schema can express.
+
 ## Restricting what an admin may do
 
 A Builder instance can be narrowed with `permissions`. Everything is allowed by
@@ -388,11 +435,18 @@ src/
     FullBuilderPage.tsx           Unrestricted builder
     LockedDownFormPage.tsx        Restricted builder, host-owned state
     RendererPage.tsx              Paste a definition and fill it in
+    ConditionsPage.tsx            Conditional logic, live, with its rules shown
   examples/
     programQuestionSlot.tsx       A host-defined field type
     lockedDownForm.ts             A fixed form with pinned fields
   builder/
     index.ts                      Public surface for hosts
+    conditions/
+      model.ts                    Condition trees, the stored form of a rule
+      parse.ts                    The expression language admins type
+      print.ts                    Trees back to expressions, keys or labels
+      evaluate.ts                 Evaluation, visibility fixpoint, pruning
+      toSchema.ts                 Conditions compiled to JSON Schema fragments
     model/
       types.ts                    FormDefinition, FormField, FieldLocks
       fieldType.ts                FieldTypeDefinition, PropertySpec, defineFieldType
@@ -444,7 +498,8 @@ not exercised in jsdom.
   plus `rating` and `rating-pictogram` definitions with locked DEX fields
 - Import an existing JSON Schema back into the builder
 - Static content blocks (headings, paragraphs) as dataless types, sections or pages
-- Conditional visibility (`if`/`then` or `dependencies`)
+- Named predicates: developer-registered functions a rule can reference for
+  logic beyond the expression language
 - Undo/redo
 - A live preview pane in the builder, reusing `FormRenderer`
 - Server-side PDF generation for unattended exports

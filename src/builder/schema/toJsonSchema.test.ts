@@ -359,3 +359,82 @@ describe("toJsonSchema", () => {
     ).toBe(false)
   })
 })
+
+describe("toJsonSchema conditional logic", () => {
+  it("folds visibility into a static requirement", () => {
+    const contact = field("radio", "contactMethod", {
+      options: [
+        { id: "1", label: "Phone", value: "phone" },
+        { id: "2", label: "None", value: "none" },
+      ],
+    })
+    const phone = field("text", "phoneNumber", { required: true })
+    phone.visibleWhen = { op: "eq", field: contact.id, value: "phone" }
+
+    const { schema, uiSchema } = generate([contact, phone])
+
+    // Not unconditionally required: the form itself withholds the field.
+    expect(schema.required).toBeUndefined()
+    expect(schema.allOf).toEqual([
+      {
+        if: {
+          properties: { contactMethod: { const: "phone" } },
+          required: ["contactMethod"],
+        },
+        then: { properties: { phoneNumber: {} }, required: ["phoneNumber"] },
+      },
+    ])
+    expect(uiSchema.phoneNumber).toMatchObject({
+      "ui:visibleWhen": { op: "eq", field: "contactMethod", value: "phone" },
+    })
+
+    const validate = compile(schema)
+    expect(validate({ contactMethod: "none" })).toBe(true)
+    expect(validate({ contactMethod: "phone" })).toBe(false)
+    expect(validate({ contactMethod: "phone", phoneNumber: "0400" })).toBe(true)
+  })
+
+  it("compiles requiredWhen, combined with visibility when both exist", () => {
+    const tick = field("checkbox", "hasAllergies")
+    const details = field("textarea", "allergyDetails")
+    details.visibleWhen = { op: "eq", field: tick.id, value: true }
+    details.requiredWhen = { op: "eq", field: tick.id, value: true }
+
+    const { schema } = generate([tick, details])
+    const validate = compile(schema)
+
+    expect(validate({})).toBe(true)
+    expect(validate({ hasAllergies: false })).toBe(true)
+    expect(validate({ hasAllergies: true })).toBe(false)
+    expect(validate({ hasAllergies: true, allergyDetails: "peanuts" })).toBe(
+      true,
+    )
+  })
+
+  it("compiles a requiredWhen on an always-visible field", () => {
+    const contact = field("radio", "contactMethod", {
+      options: [{ id: "1", label: "None", value: "none" }],
+    })
+    const comments = field("textarea", "comments")
+    comments.requiredWhen = { op: "eq", field: contact.id, value: "none" }
+
+    const { schema } = generate([contact, comments])
+    const validate = compile(schema)
+    expect(validate({})).toBe(true)
+    expect(validate({ contactMethod: "none" })).toBe(false)
+    expect(validate({ contactMethod: "none", comments: "bye" })).toBe(true)
+  })
+
+  it("compiles under strict Ajv with array membership conditions", () => {
+    const services = field("checkboxGroup", "services", {
+      options: [{ id: "1", label: "Other", value: "other" }],
+    })
+    const other = field("text", "otherService")
+    other.requiredWhen = { op: "contains", field: services.id, value: "other" }
+
+    const { schema } = generate([services, other])
+    const validate = compile(schema)
+    expect(validate({ services: ["other"] })).toBe(false)
+    expect(validate({ services: ["other"], otherService: "gym" })).toBe(true)
+  })
+})

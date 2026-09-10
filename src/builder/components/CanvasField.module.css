@@ -129,11 +129,29 @@
 
 .footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 6px;
 }
 
+.rules {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rule {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .key {
+  margin-left: auto;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--color-text-muted);

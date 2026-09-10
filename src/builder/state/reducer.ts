@@ -7,6 +7,7 @@ import {
   type ResolvedPermissions,
 } from "../model/permissions"
 import type { FieldTypeRegistry } from "../model/registry"
+import type { Condition } from "../conditions/model"
 import type {
   FieldOption,
   FieldProps,
@@ -32,6 +33,9 @@ export interface FieldPatch {
   key?: string
   autoKey?: boolean
   props?: Partial<FieldProps>
+  /** `null` removes the rule; `undefined` leaves it untouched. */
+  visibleWhen?: Condition | null
+  requiredWhen?: Condition | null
 }
 
 export type BuilderAction =
@@ -229,6 +233,19 @@ function applyPatch(
 
   if (patch.props && !locks.props) {
     next.props = mergeProps(field.props, patch.props)
+  }
+
+  // Conditions are structural, so they travel with the type-specific settings
+  // under the props lock.
+  if (patch.visibleWhen !== undefined && !locks.props) {
+    next.visibleWhen = patch.visibleWhen ?? undefined
+  }
+  if (
+    patch.requiredWhen !== undefined &&
+    !locks.props &&
+    !definition.dataless
+  ) {
+    next.requiredWhen = patch.requiredWhen ?? undefined
   }
 
   return next

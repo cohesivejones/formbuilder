@@ -379,6 +379,7 @@ export function Builder({
                 {activeTab === "field" ? (
                   <PropertiesPanel
                     field={selectedField}
+                    fields={form.fields}
                     issues={selectedIssues}
                     canDuplicate={
                       selectedField

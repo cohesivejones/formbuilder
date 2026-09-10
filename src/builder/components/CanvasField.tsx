@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { printCondition } from "../conditions/print"
 import { effectiveLocks, type ResolvedLocks } from "../model/permissions"
 import type { FormField } from "../model/types"
 import type { ValidationIssue } from "../model/validate"
@@ -12,6 +13,8 @@ import styles from "./CanvasField.module.css"
 
 interface CanvasFieldProps {
   field: FormField
+  /** Every field on the form, for naming the fields a condition refers to. */
+  allFields: FormField[]
   index: number
   count: number
   selected: boolean
@@ -26,6 +29,7 @@ interface CanvasFieldProps {
 
 export function CanvasField({
   field,
+  allFields,
   index,
   count,
   selected,
@@ -70,6 +74,7 @@ export function CanvasField({
       {indicator === "before" && <DropLine />}
       <FieldCard
         field={field}
+        fields={allFields}
         selected={selected}
         issues={issues}
         onSelect={() => onSelect(field.id)}
@@ -173,6 +178,8 @@ export function DropLine() {
 
 interface FieldCardProps {
   field: FormField
+  /** When given, condition rules are shown beneath the preview. */
+  fields?: FormField[]
   selected?: boolean
   issues?: ValidationIssue[]
   handle?: ReactNode
@@ -187,6 +194,7 @@ interface FieldCardProps {
  */
 export function FieldCard({
   field,
+  fields,
   selected = false,
   issues = [],
   handle,
@@ -271,8 +279,22 @@ export function FieldCard({
           <span className={styles.noPreview}>No preview</span>
         )}
       </div>
-      {!definition.dataless && (
+      {(!definition.dataless || field.visibleWhen) && (
         <div className={styles.footer}>
+          {fields && (
+            <span className={styles.rules}>
+              {field.visibleWhen && (
+                <code className={styles.rule}>
+                  visible when {printCondition(field.visibleWhen, fields)}
+                </code>
+              )}
+              {field.requiredWhen && (
+                <code className={styles.rule}>
+                  required when {printCondition(field.requiredWhen, fields)}
+                </code>
+              )}
+            </span>
+          )}
           <code className={styles.key}>{field.key}</code>
         </div>
       )}

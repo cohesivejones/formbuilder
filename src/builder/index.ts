@@ -31,6 +31,23 @@ export type {
 } from "./model/types"
 export { validateForm, type ValidationIssue } from "./model/validate"
 export { readPersistedForm } from "./state/useFormBuilder"
+export {
+  referencedFields,
+  type Condition,
+  type Literal,
+} from "./conditions/model"
+export {
+  parseCondition,
+  type ParseContext,
+  type ParseResult,
+} from "./conditions/parse"
+export { printCondition, conditionWithKeys } from "./conditions/print"
+export {
+  evaluateCondition,
+  resolveVisibility,
+  visibleValues,
+} from "./conditions/evaluate"
+export { conditionToSchema } from "./conditions/toSchema"
 export { FormRenderer, type FormRendererProps } from "./render/FormRenderer"
 export {
   createSubmissionValidator,

@@ -435,3 +435,45 @@ describe("builderReducer permissions", () => {
     expect(state.form.fields.map((f) => f.key)).toEqual(["keep"])
   })
 })
+
+describe("builderReducer conditions", () => {
+  it("sets and clears rules through a patch", () => {
+    let state = run([
+      { type: "addField", fieldType: "checkbox" },
+      { type: "addField", fieldType: "text" },
+    ])
+    const [tick, text] = state.form.fields
+    const condition = { op: "eq", field: tick.id, value: true } as const
+
+    state = reducer(state, {
+      type: "updateField",
+      id: text.id,
+      patch: { visibleWhen: condition, requiredWhen: condition },
+    })
+    expect(state.form.fields[1].visibleWhen).toEqual(condition)
+    expect(state.form.fields[1].requiredWhen).toEqual(condition)
+
+    state = reducer(state, {
+      type: "updateField",
+      id: text.id,
+      patch: { visibleWhen: null },
+    })
+    expect(state.form.fields[1].visibleWhen).toBeUndefined()
+    expect(state.form.fields[1].requiredWhen).toEqual(condition)
+  })
+
+  it("keeps rules under the props lock", () => {
+    const anchor = field("checkbox", "anchor")
+    const locked = field("text", "locked", { locks: { props: true } })
+    const start: BuilderState = {
+      form: { title: "t", description: "", fields: [anchor, locked] },
+      selectedId: null,
+    }
+    const state = reducer(start, {
+      type: "updateField",
+      id: locked.id,
+      patch: { visibleWhen: { op: "eq", field: anchor.id, value: true } },
+    })
+    expect(state.form.fields[1].visibleWhen).toBeUndefined()
+  })
+})

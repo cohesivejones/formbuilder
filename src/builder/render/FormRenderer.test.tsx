@@ -335,3 +335,122 @@ describe("FormRenderer", () => {
     expect(screen.getByText(/does not know about/)).toBeInTheDocument()
   })
 })
+
+describe("FormRenderer conditional logic", () => {
+  function conditionalForm() {
+    const contact = field("radio", "contactMethod", {
+      label: "Contact method",
+      options: [
+        { id: "1", label: "Phone", value: "phone" },
+        { id: "2", label: "None", value: "none" },
+      ],
+    })
+    const phone = field("text", "phoneNumber", {
+      label: "Phone number",
+      required: true,
+    })
+    phone.visibleWhen = { op: "eq", field: contact.id, value: "phone" }
+    const comments = field("textarea", "comments", { label: "Comments" })
+    comments.requiredWhen = { op: "eq", field: contact.id, value: "none" }
+    return form([contact, phone, comments])
+  }
+
+  it("shows a field only while its condition holds", async () => {
+    const user = userEvent.setup()
+    render(<FormRenderer form={conditionalForm()} />)
+
+    // Hidden fields still exist in the markup as aria-hidden print ghosts
+    // (jsdom does not apply the stylesheet that hides them), so presence is
+    // asked through the accessibility tree, which is what a person gets.
+    const phoneBox = () =>
+      screen.queryByRole("textbox", { name: /Phone number/ })
+    expect(phoneBox()).not.toBeInTheDocument()
+    await user.click(screen.getByRole("radio", { name: "Phone" }))
+    expect(phoneBox()).toBeInTheDocument()
+    await user.click(screen.getByRole("radio", { name: "None" }))
+    expect(phoneBox()).not.toBeInTheDocument()
+  })
+
+  it("keeps a hidden field's answer on screen but never submits it", async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(<FormRenderer form={conditionalForm()} onSubmit={onSubmit} />)
+
+    await user.click(screen.getByRole("radio", { name: "Phone" }))
+    await user.type(screen.getByLabelText(/Phone number/), "0400 000 000")
+    await user.click(screen.getByRole("radio", { name: "None" }))
+    await user.type(screen.getByLabelText("Comments"), "Nothing further")
+    await user.click(screen.getByRole("button", { name: "Submit" }))
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      contactMethod: "none",
+      comments: "Nothing further",
+    })
+
+    // The answer was retained underneath and comes back with the field.
+    await user.click(screen.getByRole("radio", { name: "Phone" }))
+    expect(screen.getByLabelText(/Phone number/)).toHaveValue("0400 000 000")
+  })
+
+  it("requires a visible conditional field and forgets it once hidden", async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(<FormRenderer form={conditionalForm()} onSubmit={onSubmit} />)
+
+    // Phone chosen, number omitted: blocked.
+    await user.click(screen.getByRole("radio", { name: "Phone" }))
+    await user.click(screen.getByRole("button", { name: "Submit" }))
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(
+      screen.getAllByText("This field is required").length,
+    ).toBeGreaterThan(0)
+
+    // Switch away: the demand disappears with the field.
+    await user.click(screen.getByRole("radio", { name: "None" }))
+    await user.type(screen.getByLabelText("Comments"), "ok")
+    await user.click(screen.getByRole("button", { name: "Submit" }))
+    expect(onSubmit).toHaveBeenCalled()
+  })
+
+  it("enforces requiredWhen on an always-visible field", async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(<FormRenderer form={conditionalForm()} onSubmit={onSubmit} />)
+
+    await user.click(screen.getByRole("radio", { name: "None" }))
+    await user.click(screen.getByRole("button", { name: "Submit" }))
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Comments: This field is required",
+    )
+  })
+
+  it("cascades: hiding a controller takes its dependents down too", async () => {
+    const user = userEvent.setup()
+    const a = field("checkbox", "a", { label: "Show B" })
+    const b = field("checkbox", "b", { label: "Show C" })
+    b.visibleWhen = { op: "eq", field: a.id, value: true }
+    const c = field("text", "c", { label: "C" })
+    c.visibleWhen = { op: "eq", field: b.id, value: true }
+    render(<FormRenderer form={form([a, b, c])} />)
+
+    await user.click(screen.getByLabelText("Show B"))
+    await user.click(screen.getByLabelText("Show C"))
+    expect(screen.getByLabelText("C")).toBeInTheDocument()
+
+    // Unticking A hides B, whose still-ticked answer must no longer show C.
+    await user.click(screen.getByLabelText("Show B"))
+    expect(
+      screen.queryByRole("checkbox", { name: "Show C" }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole("textbox", { name: "C" })).not.toBeInTheDocument()
+  })
+
+  it("prints a hidden question as a ghost with its condition", () => {
+    const { container } = render(<FormRenderer form={conditionalForm()} />)
+    const ghost = container.querySelector(".printGhost")
+    expect(ghost).not.toBeNull()
+    expect(ghost).toHaveTextContent("Only if: Contact method = 'phone'")
+    expect(ghost).toHaveTextContent("Phone number")
+  })
+})

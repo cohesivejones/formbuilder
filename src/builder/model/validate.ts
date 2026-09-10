@@ -1,3 +1,4 @@
+import { referencedFields } from "../conditions/model"
 import type { FieldTypeRegistry } from "./registry"
 import type { FieldOption, FormDefinition, FormField } from "./types"
 import { isValidKey } from "./keys"
@@ -70,9 +71,72 @@ export function validateForm(
     if (registry.has(field.type) && definition.validate) {
       for (const message of definition.validate(field)) push(message)
     }
+
+    for (const [name, condition] of [
+      ["visibility", field.visibleWhen],
+      ["required", field.requiredWhen],
+    ] as const) {
+      if (!condition) continue
+      for (const ref of new Set(referencedFields(condition))) {
+        if (ref === field.id) {
+          push(`The ${name} condition refers to this field itself`)
+        } else if (!form.fields.some((f) => f.id === ref)) {
+          push(`The ${name} condition refers to a field that no longer exists`)
+        }
+      }
+    }
+  }
+
+  for (const id of visibilityCycles(form.fields)) {
+    issues.push({
+      fieldId: id,
+      message: "Visibility conditions form a loop between fields",
+    })
   }
 
   return issues
+}
+
+/**
+ * Fields whose visibility rules depend on each other in a circle. Evaluation
+ * still terminates on one, but which fields show becomes arbitrary, so the
+ * author is told to break the loop.
+ */
+function visibilityCycles(fields: FormField[]): Set<string> {
+  const ids = new Set(fields.map((f) => f.id))
+  const edges = new Map(
+    fields.map((f) => [
+      f.id,
+      f.visibleWhen
+        ? referencedFields(f.visibleWhen).filter((ref) => ids.has(ref))
+        : [],
+    ]),
+  )
+
+  const cyclic = new Set<string>()
+  const state = new Map<string, "visiting" | "done">()
+  const stack: string[] = []
+
+  const visit = (id: string) => {
+    state.set(id, "visiting")
+    stack.push(id)
+    for (const next of edges.get(id) ?? []) {
+      const seen = state.get(next)
+      if (seen === "visiting") {
+        for (const member of stack.slice(stack.indexOf(next)))
+          cyclic.add(member)
+      } else if (seen === undefined) {
+        visit(next)
+      }
+    }
+    stack.pop()
+    state.set(id, "done")
+  }
+
+  for (const field of fields) {
+    if (!state.has(field.id)) visit(field.id)
+  }
+  return cyclic
 }
 
 function validateOptions(field: FormField, name: string): string[] {

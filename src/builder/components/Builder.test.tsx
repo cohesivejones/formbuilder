@@ -314,6 +314,70 @@ describe("Builder", () => {
     })
   })
 
+  describe("conditions", () => {
+    it("authors a rule through the expression input and shows it on the card", async () => {
+      const user = userEvent.setup()
+      render(<Builder persist={false} />)
+
+      await user.click(
+        screen.getByRole("button", { name: "Add Checkbox field" }),
+      )
+      let label = screen.getByLabelText("Label")
+      await user.clear(label)
+      await user.type(label, "Has allergies")
+
+      await user.click(screen.getByRole("button", { name: "Add Text field" }))
+      const input = screen.getByLabelText("Visible when")
+      await user.type(input, "hasAllergies = true")
+
+      expect(
+        within(screen.getByTestId("canvas-field-text")).getByText(
+          "visible when hasAllergies = true",
+        ),
+      ).toBeInTheDocument()
+
+      // The rule survives into the exported schema's UI half.
+      await user.click(screen.getByRole("tab", { name: /^Schema/ }))
+      expect(screen.getByRole("tab", { name: /^Schema/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      )
+    })
+
+    it("explains a bad expression without committing it", async () => {
+      const user = userEvent.setup()
+      render(<Builder persist={false} />)
+
+      await user.click(screen.getByRole("button", { name: "Add Text field" }))
+      const input = screen.getByLabelText("Visible when")
+      await user.type(input, "nonsense = true")
+
+      expect(screen.getByText(/Unknown field "nonsense"/)).toBeInTheDocument()
+      expect(
+        within(screen.getByTestId("canvas-field-text")).queryByText(
+          /visible when/,
+        ),
+      ).not.toBeInTheDocument()
+    })
+
+    it("flags a rule whose field was deleted", async () => {
+      const user = userEvent.setup()
+      render(<Builder persist={false} />)
+
+      await user.click(
+        screen.getByRole("button", { name: "Add Checkbox field" }),
+      )
+      await user.click(screen.getByRole("button", { name: "Add Text field" }))
+      await user.type(screen.getByLabelText("Visible when"), "checkbox = true")
+      await user.click(screen.getByRole("button", { name: "Delete Checkbox" }))
+
+      await user.click(screen.getByRole("tab", { name: /^Schema/ }))
+      expect(
+        screen.getByText(/refers to a field that no longer exists/),
+      ).toBeInTheDocument()
+    })
+  })
+
   describe("permissions", () => {
     // The scenario a host wants for one fixed form: reword, reorder, delete.
     const wordingOnly = {

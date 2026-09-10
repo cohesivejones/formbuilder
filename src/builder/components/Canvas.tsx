@@ -132,6 +132,7 @@ export function Canvas({
                   <CanvasField
                     key={field.id}
                     field={field}
+                    allFields={form.fields}
                     index={index}
                     count={form.fields.length}
                     selected={field.id === selectedId}

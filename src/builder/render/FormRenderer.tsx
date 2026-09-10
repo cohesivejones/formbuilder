@@ -7,6 +7,8 @@ import {
   useState,
   type FormEvent,
 } from "react"
+import { resolveVisibility, visibleValues } from "../conditions/evaluate"
+import { printCondition } from "../conditions/print"
 import { builtInFieldTypes } from "../fieldTypes/builtIns"
 import type { FieldTypeDefinition } from "../model/fieldType"
 import { createRegistry, type FieldTypeRegistry } from "../model/registry"
@@ -65,9 +67,25 @@ export function FormRenderer({
     return createSubmissionValidator(schema)
   }, [form, registry])
 
+  /**
+   * Answers of hidden fields are kept in state, so a control accidentally
+   * toggled and toggled back loses nothing, but they take no further part:
+   * validation and submission only ever see what is on show. The exported
+   * schema folds visibility into its conditional requirements the same way,
+   * so both sides agree.
+   */
+  const visible = useMemo(
+    () => resolveVisibility(form.fields, values),
+    [form.fields, values],
+  )
+  const effectiveValues = useMemo(
+    () => visibleValues(form.fields, values, visible),
+    [form.fields, values, visible],
+  )
+
   const errors: SubmissionErrors = useMemo(
-    () => validate(values),
-    [validate, values],
+    () => validate(effectiveValues),
+    [validate, effectiveValues],
   )
 
   const setValue = useCallback((key: string, value: unknown) => {
@@ -97,7 +115,7 @@ export function FormRenderer({
       return
     }
     setSubmitted(true)
-    onSubmit?.(prune(values))
+    onSubmit?.(prune(effectiveValues))
   }
 
   /**
@@ -106,7 +124,7 @@ export function FormRenderer({
    * under the pointer at the moment of a click, which silently swallows it.
    */
   const visibleErrors = submitAttempted
-    ? form.fields.filter((f) => errors[f.key])
+    ? form.fields.filter((f) => visible.has(f.id) && errors[f.key])
     : []
 
   return (
@@ -144,16 +162,39 @@ export function FormRenderer({
         <p className={styles.blank}>This form has no fields.</p>
       )}
 
-      {form.fields.map((field) => (
-        <RenderedField
-          key={field.id}
-          field={field}
-          registry={registry}
-          value={values[field.key]}
-          error={submitAttempted ? errors[field.key] : undefined}
-          onChange={(value) => setValue(field.key, value)}
-        />
-      ))}
+      {form.fields.map((field) =>
+        visible.has(field.id) ? (
+          <RenderedField
+            key={field.id}
+            field={field}
+            registry={registry}
+            value={values[field.key]}
+            error={submitAttempted ? errors[field.key] : undefined}
+            onChange={(value) => setValue(field.key, value)}
+          />
+        ) : (
+          // Paper cannot show and hide, so a printed copy carries every
+          // question, each hidden one prefaced by when it applies. On screen
+          // this whole block stays display:none.
+          <div key={field.id} className={styles.printGhost} aria-hidden="true">
+            {field.visibleWhen && (
+              <p className={styles.printGhostNote}>
+                Only if:{" "}
+                {printCondition(field.visibleWhen, form.fields, {
+                  names: "label",
+                })}
+              </p>
+            )}
+            <RenderedField
+              field={field}
+              registry={registry}
+              value={undefined}
+              error={undefined}
+              onChange={() => {}}
+            />
+          </div>
+        ),
+      )}
 
       {form.fields.length > 0 && (
         <div className={styles.actions}>

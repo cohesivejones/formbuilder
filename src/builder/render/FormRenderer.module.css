@@ -157,3 +157,24 @@
     font-size: 16pt;
   }
 }
+
+/* A question the answers currently hide: absent on screen, present on paper. */
+.printGhost {
+  display: none;
+}
+
+@media print {
+  .printGhost {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    break-inside: avoid;
+  }
+
+  .printGhostNote {
+    margin: 0;
+    font-size: 10pt;
+    font-style: italic;
+    color: #555;
+  }
+}

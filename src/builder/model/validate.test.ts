@@ -112,3 +112,42 @@ describe("validateForm", () => {
     ])
   })
 })
+
+describe("validateForm conditions", () => {
+  it("passes rules that refer to real fields", () => {
+    const a = field("checkbox", "a")
+    const b = field("text", "b")
+    b.visibleWhen = { op: "eq", field: a.id, value: true }
+    expect(messages([a, b])).toEqual([])
+  })
+
+  it("flags a rule referring to a field that no longer exists", () => {
+    const b = field("text", "b")
+    b.visibleWhen = { op: "eq", field: "gone", value: true }
+    b.requiredWhen = { op: "eq", field: "gone", value: true }
+    expect(messages([b])).toEqual([
+      "The visibility condition refers to a field that no longer exists",
+      "The required condition refers to a field that no longer exists",
+    ])
+  })
+
+  it("flags a rule referring to its own field", () => {
+    const b = field("text", "b")
+    b.requiredWhen = { op: "notEmpty", field: b.id }
+    expect(messages([b])).toEqual([
+      "The required condition refers to this field itself",
+    ])
+  })
+
+  it("flags every field in a visibility loop", () => {
+    const x = field("checkbox", "x")
+    const y = field("checkbox", "y")
+    const z = field("checkbox", "z")
+    x.visibleWhen = { op: "eq", field: y.id, value: true }
+    y.visibleWhen = { op: "eq", field: x.id, value: true }
+    expect(messages([x, y, z])).toEqual([
+      "Visibility conditions form a loop between fields",
+      "Visibility conditions form a loop between fields",
+    ])
+  })
+})

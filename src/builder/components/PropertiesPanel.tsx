@@ -8,11 +8,14 @@ import type { FieldPatch } from "../state/reducer"
 import { cx } from "./cx"
 import { useBuilderContext } from "./builderContext"
 import { Icon } from "./Icon"
+import { ConditionInput } from "./ConditionInput"
 import { OptionsEditor } from "./OptionsEditor"
 import styles from "./PropertiesPanel.module.css"
 
 interface PropertiesPanelProps {
   field: FormField | null
+  /** Every field on the form, for condition rules to refer to. */
+  fields: FormField[]
   issues: ValidationIssue[]
   canDuplicate: boolean
   onChange: (patch: FieldPatch) => void
@@ -29,6 +32,7 @@ const DEFAULT_SECTION = "Settings"
  */
 export function PropertiesPanel({
   field,
+  fields,
   issues,
   canDuplicate,
   onChange,
@@ -139,6 +143,33 @@ export function PropertiesPanel({
           {renderSpecs(specs, field.props, locks.props, setProp)}
         </Section>
       ))}
+
+      {permissions.editProps && (
+        <Section title="Conditions">
+          <ConditionInput
+            key={`${field.id}-visible`}
+            label="Visible when"
+            help="e.g. contactMethod = 'phone' — blank shows the field always."
+            field={field}
+            fields={fields}
+            value={field.visibleWhen}
+            disabled={locks.props}
+            onChange={(visibleWhen) => onChange({ visibleWhen })}
+          />
+          {!definition.dataless && (
+            <ConditionInput
+              key={`${field.id}-required`}
+              label="Required when"
+              help="An answer is demanded only while this holds."
+              field={field}
+              fields={fields}
+              value={field.requiredWhen}
+              disabled={locks.props}
+              onChange={(requiredWhen) => onChange({ requiredWhen })}
+            />
+          )}
+        </Section>
+      )}
 
       {Editor && (
         <Section title="More settings">
