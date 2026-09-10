@@ -48,3 +48,39 @@ describe("ConditionsPage", () => {
     })
   })
 })
+
+describe("ConditionsPage rule editing", () => {
+  it("shows where a rule is stored in the definition", async () => {
+    const user = userEvent.setup()
+    render(<ConditionsPage />)
+    await user.click(screen.getByText("How a rule is stored"))
+    const stored = JSON.parse(
+      screen.getByTestId("stored-rule").textContent ?? "{}",
+    )
+    expect(stored.key).toBe("phoneNumber")
+    expect(stored.visibleWhen).toMatchObject({ op: "eq", value: "phone" })
+  })
+
+  it("opens the builder view with the expression prefilled, and edits flow back", async () => {
+    const user = userEvent.setup()
+    render(<ConditionsPage />)
+
+    await user.click(screen.getByRole("tab", { name: "Edit the rules" }))
+    await user.click(
+      screen.getByRole("button", { name: "Edit Best phone number" }),
+    )
+
+    const input = screen.getByLabelText("Visible when")
+    expect(input).toHaveValue("contactMethod = 'phone'")
+
+    // Loosen the rule: the phone box now also shows for email.
+    await user.clear(input)
+    await user.type(input, "contactMethod != 'none'")
+
+    await user.click(screen.getByRole("tab", { name: "Try the form" }))
+    await user.click(screen.getByRole("radio", { name: "Please email me" }))
+    expect(
+      screen.getByRole("textbox", { name: /Best phone number/ }),
+    ).toBeInTheDocument()
+  })
+})
