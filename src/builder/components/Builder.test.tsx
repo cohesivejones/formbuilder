@@ -360,6 +360,80 @@ describe("Builder", () => {
       ).not.toBeInTheDocument()
     })
 
+    it("refuses a value no option matches, naming the real options", async () => {
+      const user = userEvent.setup()
+      render(<Builder persist={false} />)
+
+      await user.click(
+        screen.getByRole("button", { name: "Add Radio group field" }),
+      )
+      let label = screen.getByLabelText("Label")
+      await user.clear(label)
+      await user.type(label, "Contact method")
+
+      await user.click(screen.getByRole("button", { name: "Add Text field" }))
+      await user.type(
+        screen.getByLabelText("Visible when"),
+        "contactMethod = 'phome'",
+      )
+
+      expect(
+        screen.getByText(
+          "contactMethod has no option 'phome' — its options are 'option1', 'option2', 'option3'",
+        ),
+      ).toBeInTheDocument()
+      // Not committed: the card carries no rule.
+      expect(
+        within(screen.getByTestId("canvas-field-text")).queryByText(
+          /visible when/,
+        ),
+      ).not.toBeInTheDocument()
+    })
+
+    it("refuses a comparison that cannot fit the field's shape", async () => {
+      const user = userEvent.setup()
+      render(<Builder persist={false} />)
+
+      await user.click(screen.getByRole("button", { name: "Add Date field" }))
+      await user.click(screen.getByRole("button", { name: "Add Text field" }))
+      await user.type(screen.getByLabelText("Visible when"), "date >= 3")
+
+      expect(
+        screen.getByText(">= compares numbers, but date holds a date"),
+      ).toBeInTheDocument()
+    })
+
+    it("suggests field keys while typing and completes on Enter", async () => {
+      const user = userEvent.setup()
+      render(<Builder persist={false} />)
+
+      await user.click(
+        screen.getByRole("button", { name: "Add Checkbox field" }),
+      )
+      let label = screen.getByLabelText("Label")
+      await user.clear(label)
+      await user.type(label, "Contact method")
+
+      await user.click(screen.getByRole("button", { name: "Add Text field" }))
+      const input = screen.getByLabelText("Visible when")
+      await user.type(input, "cont")
+
+      const option = screen.getByRole("option", { name: "contactMethod" })
+      expect(option).toBeInTheDocument()
+      await user.keyboard("{Enter}")
+
+      expect(input).toHaveValue("contactMethod")
+      expect(screen.queryByRole("option")).not.toBeInTheDocument()
+
+      // Finish the rule; it commits and lands on the card.
+      await user.type(input, " = true")
+      expect(
+        within(screen.getByTestId("canvas-field-text")).getByText(
+          "visible when contactMethod = true",
+        ),
+      ).toBeInTheDocument()
+    })
+
     it("flags a rule whose field was deleted", async () => {
       const user = userEvent.setup()
       render(<Builder persist={false} />)

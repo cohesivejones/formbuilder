@@ -1,3 +1,4 @@
+import { checkCondition } from "../conditions/check"
 import { referencedFields } from "../conditions/model"
 import type { FieldTypeRegistry } from "./registry"
 import type { FieldOption, FormDefinition, FormField } from "./types"
@@ -83,6 +84,11 @@ export function validateForm(
         } else if (!form.fields.some((f) => f.id === ref)) {
           push(`The ${name} condition refers to a field that no longer exists`)
         }
+      }
+      // A rule can turn nonsensical after it was written, for instance when an
+      // option it names is renamed, so the semantic check runs here too.
+      for (const message of checkCondition(condition, form.fields, registry)) {
+        push(`The ${name} condition will never match: ${message}`)
       }
     }
   }

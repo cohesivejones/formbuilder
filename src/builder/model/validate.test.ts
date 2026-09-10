@@ -151,3 +151,17 @@ describe("validateForm conditions", () => {
     ])
   })
 })
+
+describe("validateForm semantic rule checks", () => {
+  it("flags a stored rule whose option no longer exists", () => {
+    const radio = field("radio", "contactMethod", {
+      options: [{ id: "1", label: "Phone", value: "phone" }],
+    })
+    const dependent = field("text", "phoneNumber")
+    // Written when an 'email' option existed; the option has since been removed.
+    dependent.visibleWhen = { op: "eq", field: radio.id, value: "email" }
+    expect(messages([radio, dependent])).toEqual([
+      "The visibility condition will never match: contactMethod has no option 'email' — its options are 'phone'",
+    ])
+  })
+})

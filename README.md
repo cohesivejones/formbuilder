@@ -284,10 +284,19 @@ not (region is empty)
 
 Comparisons are `=`, `!=`, `>`, `>=`, `<`, `<=`, `contains`, `is empty` and
 `is not empty`, combined with `and`, `or`, `not` and parentheses; values are
-quoted strings, numbers, `true` or `false`. Fields are referred to by key, and a
-typo earns a suggestion. The text is parsed into the tree on every keystroke and
-never stored: renaming a field later breaks nothing, and the box re-displays the
-rule with current keys.
+quoted strings, numbers, `true` or `false`. Fields are referred to by key, with
+completions offered as one is typed and a suggestion on a typo. The text is
+parsed into the tree on every keystroke and never stored: renaming a field later
+breaks nothing, and the box re-displays the rule with current keys.
+
+The input is semantically checked as well as parsed, using each field's own
+schema mapping as the source of type truth. A rule that could never match is
+refused with the reason: `contactMethod = 'phome'` gets "contactMethod has no
+option 'phome' — its options are 'phone', 'email', 'none'", an ordering
+comparison against a date or text field is rejected, and equality against a
+multi-choice field points to `contains`. Form validation runs the same check on
+stored rules, so a rule invalidated later — say by renaming an option it names —
+is flagged rather than silently never matching.
 
 The semantics are the ones that keep data honest:
 

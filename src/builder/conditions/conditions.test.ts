@@ -6,7 +6,8 @@ import { parseCondition, type ParseContext } from "./parse"
 import { conditionWithKeys, printCondition } from "./print"
 import { evaluateCondition, resolveVisibility, visibleValues } from "./evaluate"
 import { conditionToSchema } from "./toSchema"
-import { field } from "../../test/fields"
+import { checkCondition } from "./check"
+import { field, testRegistry } from "../../test/fields"
 
 const fields = [
   { id: "f1", key: "hasAllergies" },
@@ -331,5 +332,97 @@ describe("conditionToSchema", () => {
       ...conditionToSchema(orphan, context),
     } as object)
     expect(validate({ gone: true })).toBe(false)
+  })
+})
+
+describe("checkCondition", () => {
+  const radio = field("radio", "contactMethod", {
+    options: [
+      { id: "1", label: "Phone", value: "phone" },
+      { id: "2", label: "Email", value: "email" },
+      { id: "3", label: "None", value: "none" },
+    ],
+  })
+  const services = field("checkboxGroup", "services", {
+    options: [
+      { id: "1", label: "Counselling", value: "counselling" },
+      { id: "2", label: "Other", value: "other" },
+    ],
+  })
+  const size = field("number", "householdSize")
+  const dob = field("date", "dateOfBirth")
+  const tick = field("checkbox", "hasAllergies")
+  const name = field("text", "fullName")
+  const all = [radio, services, size, dob, tick, name]
+
+  function issues(condition: Parameters<typeof checkCondition>[0]) {
+    return checkCondition(condition, all, testRegistry)
+  }
+
+  it("accepts rules that fit the fields", () => {
+    expect(issues({ op: "eq", field: radio.id, value: "phone" })).toEqual([])
+    expect(
+      issues({ op: "contains", field: services.id, value: "other" }),
+    ).toEqual([])
+    expect(issues({ op: "gte", field: size.id, value: 3 })).toEqual([])
+    expect(issues({ op: "eq", field: tick.id, value: true })).toEqual([])
+    expect(issues({ op: "contains", field: name.id, value: "call" })).toEqual(
+      [],
+    )
+    expect(issues({ op: "empty", field: dob.id })).toEqual([])
+  })
+
+  it("catches an option value that does not exist", () => {
+    expect(issues({ op: "eq", field: radio.id, value: "phome" })).toEqual([
+      "contactMethod has no option 'phome' — its options are 'phone', 'email', 'none'",
+    ])
+    expect(
+      issues({ op: "contains", field: services.id, value: "gym" }),
+    ).toEqual([
+      "services has no option 'gym' — its options are 'counselling', 'other'",
+    ])
+  })
+
+  it("catches comparisons against the wrong shape of value", () => {
+    expect(issues({ op: "eq", field: tick.id, value: "yes" })).toEqual([
+      "hasAllergies holds true or false, so it will never equal 'yes'",
+    ])
+    expect(issues({ op: "eq", field: size.id, value: "3" })).toEqual([
+      "householdSize holds a number, so it will never equal '3'",
+    ])
+    expect(issues({ op: "eq", field: name.id, value: 3 })).toEqual([
+      "fullName holds text, so it will never equal 3",
+    ])
+  })
+
+  it("catches equality against a list and ordering against non-numbers", () => {
+    expect(issues({ op: "eq", field: services.id, value: "other" })).toEqual([
+      `services holds a list — use "services contains 'other'" instead`,
+    ])
+    expect(issues({ op: "gte", field: dob.id, value: 3 })).toEqual([
+      ">= compares numbers, but dateOfBirth holds a date",
+    ])
+    expect(issues({ op: "contains", field: size.id, value: "3" })).toEqual([
+      "contains needs a list or text, but householdSize holds a number",
+    ])
+  })
+
+  it("collects issues through and/or/not and skips broken references", () => {
+    expect(
+      issues({
+        op: "and",
+        conditions: [
+          {
+            op: "not",
+            condition: { op: "eq", field: radio.id, value: "phome" },
+          },
+          { op: "eq", field: "gone", value: 1 },
+          { op: "gt", field: dob.id, value: 1 },
+        ],
+      }),
+    ).toEqual([
+      "contactMethod has no option 'phome' — its options are 'phone', 'email', 'none'",
+      "> compares numbers, but dateOfBirth holds a date",
+    ])
   })
 })
