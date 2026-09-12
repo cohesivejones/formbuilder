@@ -502,6 +502,15 @@ so dropping in empty space appends.
 
 ## Tests
 
+There are two layers. Unit and component tests run in jsdom with `npm test`.
+Real-browser checks live in [checks/](checks/) and run with
+`npm run check:browser` (or `npm run check:browser -- dnd` for one): the runner
+starts a dev server, drives headless Chromium through pointer drag-and-drop,
+printing to PDF, the permission-restricted page, conditional logic and the
+playground, and writes its screenshots and PDFs to `checks/output` for
+inspection. Chromium comes from the Playwright install in the sibling feedback
+repo; set `PLAYWRIGHT_DIR` if yours lives elsewhere.
+
 Pure logic (schema conversion, reducer, validation, registry, key slugging) is
 unit tested, including compiling the generated schema with Ajv in strict 2020-12
 mode and validating sample data against it. The renderer is tested through
