@@ -7,20 +7,17 @@ import {
   useState,
   type FormEvent,
 } from "react"
-import { resolveVisibility, visibleValues } from "../conditions/evaluate"
 import { printCondition } from "../conditions/print"
 import { builtInFieldTypes } from "../fieldTypes/builtIns"
 import type { FieldTypeDefinition } from "../model/fieldType"
 import { createRegistry, type FieldTypeRegistry } from "../model/registry"
 import type { FormDefinition, FormField } from "../model/types"
-import { toJsonSchema } from "../schema/toJsonSchema"
 import { cx } from "../components/cx"
-import {
-  createSubmissionValidator,
-  prune,
-  type SubmissionData,
-  type SubmissionErrors,
-} from "./validateSubmission"
+import { createSubmissionProcessor } from "../submission/processSubmission"
+import type {
+  SubmissionData,
+  SubmissionErrors,
+} from "../submission/validateSubmission"
 import styles from "./FormRenderer.module.css"
 
 export interface FormRendererProps {
@@ -62,31 +59,23 @@ export function FormRenderer({
   const [failures, setFailures] = useState(0)
   const summaryRef = useRef<HTMLDivElement>(null)
 
-  const validate = useMemo(() => {
-    const { schema } = toJsonSchema(form, registry)
-    return createSubmissionValidator(schema)
-  }, [form, registry])
-
   /**
-   * Answers of hidden fields are kept in state, so a control accidentally
-   * toggled and toggled back loses nothing, but they take no further part:
-   * validation and submission only ever see what is on show. The exported
-   * schema folds visibility into its conditional requirements the same way,
-   * so both sides agree.
+   * The renderer runs the same submission pipeline a server does — one
+   * function, `createSubmissionProcessor`, so the two cannot drift. Answers
+   * of hidden fields are kept in state, so a control accidentally toggled and
+   * toggled back loses nothing, but the pipeline removes them: validation and
+   * submission only ever see what is on show.
    */
-  const visible = useMemo(
-    () => resolveVisibility(form.fields, values),
-    [form.fields, values],
+  const processor = useMemo(
+    () => createSubmissionProcessor(form, fieldTypes),
+    [form, fieldTypes],
   )
-  const effectiveValues = useMemo(
-    () => visibleValues(form.fields, values, visible),
-    [form.fields, values, visible],
+  const processed = useMemo(
+    () => processor.process(values),
+    [processor, values],
   )
-
-  const errors: SubmissionErrors = useMemo(
-    () => validate(effectiveValues),
-    [validate, effectiveValues],
-  )
+  const { visible } = processed
+  const errors: SubmissionErrors = processed.errors
 
   const setValue = useCallback((key: string, value: unknown) => {
     setSubmitted(false)
@@ -115,7 +104,7 @@ export function FormRenderer({
       return
     }
     setSubmitted(true)
-    onSubmit?.(prune(effectiveValues))
+    onSubmit?.(processed.data)
   }
 
   /**

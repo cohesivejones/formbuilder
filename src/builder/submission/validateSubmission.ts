@@ -57,6 +57,11 @@ function fieldKeyOf(error: ErrorObject): string | undefined {
   if (error.keyword === "required") {
     return (error.params as { missingProperty?: string }).missingProperty
   }
+  // A property the form never declared: report it under its own name, or the
+  // whole failure would map to no field and read as an empty error set.
+  if (error.keyword === "additionalProperties") {
+    return (error.params as { additionalProperty?: string }).additionalProperty
+  }
   // "/likes/0" belongs to the field "likes".
   const [, key] = error.instancePath.split("/")
   return key || undefined

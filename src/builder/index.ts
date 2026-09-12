@@ -62,7 +62,14 @@ export {
   prune,
   type SubmissionData,
   type SubmissionErrors,
-} from "./render/validateSubmission"
+} from "./submission/validateSubmission"
+export {
+  createSubmissionProcessor,
+  type ProcessedSubmission,
+  type ProcessOptions,
+  type SubmissionProcessor,
+} from "./submission/processSubmission"
+export { coreFieldTypes } from "./fieldTypes/core"
 export { toJsonSchema } from "./schema/toJsonSchema"
 export type {
   GeneratedSchema,

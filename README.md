@@ -338,6 +338,46 @@ builder, where the sidebar's expressions are written. It also shows how a rule
 is stored: as data on its field inside the definition, which is what persists,
 pastes and exports — the expression text itself is never saved.
 
+## Validating on a server
+
+A submission API is the front end's rules or it is nothing: anyone can call it
+without the client code. The library is split so the same pipeline runs on a
+backend, imported from `src/builder/server.ts` — an entry point whose import
+graph contains no React, CSS or DOM, enforced by a test that walks it.
+
+```ts
+import { createSubmissionProcessor, coreFieldTypes } from "<library>/server"
+
+const processor = createSubmissionProcessor(definition, coreFieldTypes)
+
+// On each submission:
+const { data, errors } = processor.process(request.body)
+if (Object.keys(errors).length > 0) return reply.code(422).send(errors)
+await store(data)
+```
+
+`process` is the identical function the FormRenderer runs on every change, so
+the browser and the server cannot drift: visibility is resolved from the
+answers themselves with cascading, hidden and blank answers are removed, and
+the rest is validated against the JSON Schema generated from the same
+definition, conditional requirements included. That pipeline matters more than
+the schema alone — a schema-only check would wrongly reject a submission
+carrying a malformed answer in a field the form had hidden, and wrongly accept
+answers to questions it never asked.
+
+Answers to unasked questions — a hidden field's, or a key the form never
+declared — are dropped by default, matching the browser; pass
+`{ rejectUnasked: true }` to report them as errors instead. The processor also
+exposes the generated `schema` and `uiSchema` for hosts that persist them.
+
+`coreFieldTypes` are the built-in types minus their rendering
+([core.ts](src/builder/fieldTypes/core.ts)); the browser's `builtInFieldTypes`
+are those cores plus icons, previews and inputs, so both registries emit
+identical schemas — pinned by a parity test. A host-defined type joins the same
+way: keep its schema and validation half in a file its components import, and
+hand that half to the server. `validateForm` runs against the core registry
+too, so a definition can be checked on write as well.
+
 ## Restricting what an admin may do
 
 A Builder instance can be narrowed with `permissions`. Everything is allowed by
@@ -486,11 +526,15 @@ src/
       validate.ts                 Issues that would make the output wrong
       sample.ts                   Example form
     fieldTypes/
-      builtIns.tsx                The nine standard definitions
-      inputs.tsx                  Their interactive controls, for the renderer
+      core.ts                     The nine standard definitions, minus rendering
+      builtIns.tsx                The cores plus icons, previews and inputs
+      inputs.tsx                  The interactive controls, for the renderer
     render/
       FormRenderer.tsx            A definition rendered as a working form
+    submission/
+      processSubmission.ts        The one pipeline: visibility, pruning, schema
       validateSubmission.ts       Answers checked against the emitted schema
+    server.ts                     Server entry point: no React, CSS or DOM
     schema/
       jsonSchemaTypes.ts          The JSON Schema subset we emit
       helpers.ts                  Spread helpers for writing mappers
