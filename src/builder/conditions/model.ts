@@ -32,3 +32,20 @@ export function referencedFields(condition: Condition): string[] {
       return [condition.field]
   }
 }
+
+/**
+ * Whether the rule-row builder can represent a condition faithfully.
+ * Everything the rows produce qualifies; a `not` written in the expression
+ * language has no row shape, so such a rule stays with the expression view.
+ */
+export function isBuilderEditable(condition: Condition): boolean {
+  switch (condition.op) {
+    case "not":
+      return false
+    case "and":
+    case "or":
+      return condition.conditions.every(isBuilderEditable)
+    default:
+      return true
+  }
+}

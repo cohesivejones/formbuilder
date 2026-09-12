@@ -48,7 +48,14 @@ export {
   visibleValues,
 } from "./conditions/evaluate"
 export { conditionToSchema } from "./conditions/toSchema"
-export { checkCondition } from "./conditions/check"
+export {
+  checkCondition,
+  fieldValueInfo,
+  type FieldValueInfo,
+} from "./conditions/check"
+export { ConditionEditor } from "./components/ConditionEditor"
+export { ConditionBuilder } from "./components/ConditionBuilder"
+export { ConditionInput } from "./components/ConditionInput"
 export { FormRenderer, type FormRendererProps } from "./render/FormRenderer"
 export {
   createSubmissionValidator,

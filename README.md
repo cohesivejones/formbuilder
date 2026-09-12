@@ -289,6 +289,17 @@ completions offered as one is typed and a suggestion on a typo. The text is
 parsed into the tree on every keystroke and never stored: renaming a field later
 breaks nothing, and the box re-displays the rule with current keys.
 
+Each rule offers two views over the same stored tree, switched beside its
+label. **Expression** is the fast path described above. **Rules** is a
+structured editor: rows of field, comparison and value dropdowns under an
+all/any connective, with groups nestable inside groups. Everything in a row is
+picked from what exists — fields from the form, operators filtered to the
+field's shape, values from the field's own options — so a rule built there
+cannot name a missing option, and the grouping ambiguity of a typed
+`a and b or c` cannot arise, the grouping being explicit structure. The one
+thing rows cannot express is `not`, so a rule using it stays with the
+expression view.
+
 The input is semantically checked as well as parsed, using each field's own
 schema mapping as the source of type truth. A rule that could never match is
 refused with the reason: `contactMethod = 'phome'` gets "contactMethod has no

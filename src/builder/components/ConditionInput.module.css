@@ -9,6 +9,13 @@
   font-weight: 500;
 }
 
+.labelLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .input {
   font-family: var(--font-mono);
   font-size: 12px;

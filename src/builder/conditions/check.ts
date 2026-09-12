@@ -34,7 +34,7 @@ export function checkCondition(
 
     const field = byId.get(c.field)
     if (!field) return // a broken reference is reported separately
-    const info = valueInfo(field, registry)
+    const info = fieldValueInfo(field, registry)
     if (info.kind === "unknown") return
     const key = field.key
 
@@ -93,14 +93,21 @@ export function checkCondition(
 
 const SYMBOL = { gt: ">", gte: ">=", lt: "<", lte: "<=" } as const
 
-interface ValueInfo {
+export interface FieldValueInfo {
   kind: "text" | "number" | "boolean" | "list" | "unknown"
   noun: string
   /** For choice fields, the values an answer can take. */
   options?: Literal[]
 }
 
-function valueInfo(field: FormField, registry: FieldTypeRegistry): ValueInfo {
+/**
+ * The shape of the answers a field produces, read from its own schema mapping.
+ * The semantic checker and the rule-row builder both draw on it.
+ */
+export function fieldValueInfo(
+  field: FormField,
+  registry: FieldTypeRegistry,
+): FieldValueInfo {
   const schema = registry.resolve(field.type).toJsonSchema?.(field)
   if (!schema) return { kind: "unknown", noun: "an unknown value" }
 
@@ -147,7 +154,7 @@ function consts(
   return values.length > 0 ? values : undefined
 }
 
-function literalFits(kind: ValueInfo["kind"], value: Literal): boolean {
+function literalFits(kind: FieldValueInfo["kind"], value: Literal): boolean {
   if (kind === "text") return typeof value === "string"
   if (kind === "number") return typeof value === "number"
   if (kind === "boolean") return typeof value === "boolean"

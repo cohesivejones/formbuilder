@@ -434,6 +434,35 @@ describe("Builder", () => {
       ).toBeInTheDocument()
     })
 
+    it("authors a rule through the rule rows without typing", async () => {
+      const user = userEvent.setup()
+      render(<Builder persist={false} />)
+
+      await user.click(
+        screen.getByRole("button", { name: "Add Checkbox field" }),
+      )
+      const label = screen.getByLabelText("Label")
+      await user.clear(label)
+      await user.type(label, "Show more")
+
+      await user.click(screen.getByRole("button", { name: "Add Text field" }))
+      // Two rules, two Rules toggles: take the one for "Visible when".
+      await user.click(screen.getAllByRole("button", { name: "Rules" })[0])
+      await user.click(screen.getByRole("button", { name: "Add a rule" }))
+
+      expect(
+        within(screen.getByTestId("canvas-field-text")).getByText(
+          "visible when showMore = true",
+        ),
+      ).toBeInTheDocument()
+
+      // The same rule reads back in the expression view.
+      await user.click(screen.getAllByRole("button", { name: "Expression" })[0])
+      expect(screen.getByLabelText("Visible when")).toHaveValue(
+        "showMore = true",
+      )
+    })
+
     it("flags a rule whose field was deleted", async () => {
       const user = userEvent.setup()
       render(<Builder persist={false} />)

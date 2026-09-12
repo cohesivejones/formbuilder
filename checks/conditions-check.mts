@@ -6,6 +6,8 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const errors = watchErrors(page)
 
 const r = {
+  rowsAuthored: -1,
+  rowsExpression: "",
   phoneHiddenAtStart: false,
   phoneGoneAgain: false,
   alert: "",
@@ -59,7 +61,7 @@ await page.pdf({
 //    prefilled; loosening the rule changes the try view at once.
 await page.getByRole("tab", { name: "Edit the rules" }).click()
 await page.getByRole("button", { name: "Edit Best phone number" }).click()
-const visibleWhen = page.getByLabel("Visible when")
+const visibleWhen = page.getByLabel("Visible when", { exact: true })
 r.prefilled = await visibleWhen.inputValue()
 await visibleWhen.fill("contactMethod != 'none'")
 await page.getByRole("tab", { name: "Try the form" }).click()
@@ -76,13 +78,13 @@ await page.reload()
 await page.getByRole("button", { name: "Add Checkbox field" }).click()
 await page.getByLabel("Label", { exact: true }).fill("Show more")
 await page.getByRole("button", { name: "Add Text field" }).click()
-await page.getByLabel("Visible when").fill("showMore = true")
+await page.getByLabel("Visible when", { exact: true }).fill("showMore = true")
 r.cardRule = await page
   .getByTestId("canvas-field-text")
   .getByText("visible when showMore = true")
   .count()
 
-await page.getByLabel("Visible when").fill("showMoar = true")
+await page.getByLabel("Visible when", { exact: true }).fill("showMoar = true")
 r.parseError = await page.getByText(/Unknown field "showMoar"/).innerText()
 await page.screenshot({ path: `${OUT}/cond-03-authoring.png` })
 
@@ -91,7 +93,7 @@ await page.screenshot({ path: `${OUT}/cond-03-authoring.png` })
 await page.getByRole("button", { name: "Add Radio group field" }).click()
 await page.getByLabel("Label", { exact: true }).fill("Reason")
 await page.getByRole("button", { name: "Edit Text" }).click()
-const rule = page.getByLabel("Visible when")
+const rule = page.getByLabel("Visible when", { exact: true })
 await rule.fill("reason = 'phome'")
 r.semanticError = await page
   .getByText(/reason has no option 'phome'/)
@@ -104,13 +106,38 @@ await page.screenshot({ path: `${OUT}/cond-06-autocomplete.png` })
 await page.keyboard.press("Enter")
 r.completed = await rule.inputValue()
 
+// 7. The rule rows: build the same kind of rule from dropdowns alone, and see
+//    it read back in the expression view.
+await rule.fill("")
+await page.getByRole("button", { name: "Rules" }).first().click()
+await page.getByRole("button", { name: "Add a rule" }).click()
+await page
+  .getByTestId("condition-row")
+  .getByLabel("Rule field")
+  .selectOption({ label: "reason" })
+await page
+  .getByTestId("condition-row")
+  .getByLabel("Rule value")
+  .selectOption("option2")
+r.rowsAuthored = await page
+  .getByTestId("canvas-field-text")
+  .getByText("visible when reason = 'option2'")
+  .count()
+await page.screenshot({ path: `${OUT}/cond-07-rule-rows.png` })
+await page.getByRole("button", { name: "Expression" }).first().click()
+r.rowsExpression = await page
+  .getByLabel("Visible when", { exact: true })
+  .inputValue()
+
 console.log(JSON.stringify(r, null, 2))
 console.log("errors:", errors.length ? errors : "none")
 await browser.close()
 
 report(
   "CONDITIONS",
-  /its options are 'option1', 'option2', 'option3'/.test(r.semanticError) &&
+  r.rowsAuthored === 1 &&
+    r.rowsExpression === "reason = 'option2'" &&
+    /its options are 'option1', 'option2', 'option3'/.test(r.semanticError) &&
     r.suggestion === "reason" &&
     r.completed === "reason" &&
     r.prefilled === "contactMethod = 'phone'" &&

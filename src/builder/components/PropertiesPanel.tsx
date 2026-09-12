@@ -8,7 +8,7 @@ import type { FieldPatch } from "../state/reducer"
 import { cx } from "./cx"
 import { useBuilderContext } from "./builderContext"
 import { Icon } from "./Icon"
-import { ConditionInput } from "./ConditionInput"
+import { ConditionEditor } from "./ConditionEditor"
 import { OptionsEditor } from "./OptionsEditor"
 import styles from "./PropertiesPanel.module.css"
 
@@ -146,7 +146,7 @@ export function PropertiesPanel({
 
       {permissions.editProps && (
         <Section title="Conditions">
-          <ConditionInput
+          <ConditionEditor
             key={`${field.id}-visible`}
             label="Visible when"
             help="e.g. contactMethod = 'phone' — blank shows the field always."
@@ -157,7 +157,7 @@ export function PropertiesPanel({
             onChange={(visibleWhen) => onChange({ visibleWhen })}
           />
           {!definition.dataless && (
-            <ConditionInput
+            <ConditionEditor
               key={`${field.id}-required`}
               label="Required when"
               help="An answer is demanded only while this holds."

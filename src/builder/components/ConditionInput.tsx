@@ -10,6 +10,8 @@ import styles from "./ConditionInput.module.css"
 
 interface ConditionInputProps {
   label: string
+  /** Rendered at the right of the label line — a view toggle, typically. */
+  labelExtra?: React.ReactNode
   help: string
   field: FormField
   /** Every field on the form, for resolving and suggesting keys. */
@@ -30,6 +32,7 @@ interface ConditionInputProps {
  */
 export function ConditionInput({
   label,
+  labelExtra,
   help,
   field,
   fields,
@@ -118,7 +121,10 @@ export function ConditionInput({
 
   return (
     <div className={styles.row}>
-      <label htmlFor={id}>{label}</label>
+      <div className={styles.labelLine}>
+        <label htmlFor={id}>{label}</label>
+        {labelExtra}
+      </div>
       <div className={styles.inputWrap}>
         <input
           id={id}
