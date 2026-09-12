@@ -20,6 +20,11 @@ export const DEMO_ROUTES = [
     label: "Conditional logic",
     summary: "Answers show, hide and require fields",
   },
+  {
+    path: "/playground",
+    label: "Playground",
+    summary: "Take the condition language apart",
+  },
 ] as const
 
 export type DemoRoute = (typeof DEMO_ROUTES)[number]

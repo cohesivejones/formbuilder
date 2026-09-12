@@ -317,7 +317,11 @@ Visibility itself is presentation and travels in the UI schema as
 limit: comparisons are always against literal values, never between two fields,
 which is exactly the subset JSON Schema can express.
 
-The `/conditions` demo shows both sides over one definition: fill the form in
+`/playground` takes a single expression apart: the tree it parses to, the
+schema fragment it compiles to, and its verdict against editable sample
+answers — including a preset pair showing that `and` binds tighter than `or`
+and parentheses regroup. The `/conditions` demo shows both sides over one
+definition: fill the form in
 and watch fields come and go, or switch to "Edit the rules" for the real
 builder, where the sidebar's expressions are written. It also shows how a rule
 is stored: as data on its field inside the definition, which is what persists,

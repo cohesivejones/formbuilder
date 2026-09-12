@@ -4,6 +4,7 @@ import { FullBuilderPage } from "./demo/FullBuilderPage"
 import { LockedDownFormPage } from "./demo/LockedDownFormPage"
 import { RendererPage } from "./demo/RendererPage"
 import { ConditionsPage } from "./demo/ConditionsPage"
+import { PlaygroundPage } from "./demo/PlaygroundPage"
 import styles from "./App.module.css"
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
           <Route path="/locked-down" component={LockedDownFormPage} />
           <Route path="/renderer" component={RendererPage} />
           <Route path="/conditions" component={ConditionsPage} />
+          <Route path="/playground" component={PlaygroundPage} />
           <Route>
             <Redirect to="/" />
           </Route>
