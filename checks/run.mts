@@ -11,6 +11,7 @@ import { spawn, spawnSync } from "node:child_process"
 import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { chromium } from "playwright"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const outDir = join(here, "output")
@@ -34,7 +35,7 @@ const vite = spawn("npx", ["vite", "--port", "5199", "--strictPort"], {
   stdio: "ignore",
 })
 
-async function waitForServer() {
+async function waitForServer(): Promise<void> {
   for (let attempt = 0; attempt < 60; attempt++) {
     try {
       const response = await fetch("http://localhost:5199/")
@@ -47,12 +48,38 @@ async function waitForServer() {
   throw new Error("The dev server never answered on port 5199")
 }
 
+/**
+ * The dev server compiles modules on demand, so the very first page load is
+ * slow enough to make pointer-driven checks flaky. Visiting every route once
+ * warms the module graph before any check runs.
+ */
+async function warmRoutes(): Promise<void> {
+  const browser = await chromium.launch()
+  const page = await browser.newPage()
+  for (const route of [
+    "/",
+    "/locked-down",
+    "/renderer",
+    "/conditions",
+    "/playground",
+  ]) {
+    await page.goto(`http://localhost:5199${route}`)
+    await page.waitForLoadState("networkidle")
+  }
+  await browser.close()
+}
+
 let failures = 0
 try {
   await waitForServer()
+  await warmRoutes()
   for (const name of checks) {
-    const script = join(here, `${name}-check.mjs`)
-    const result = spawnSync("node", [script, outDir], { stdio: "inherit" })
+    const script = join(here, `${name}-check.mts`)
+    const result = spawnSync(
+      "node",
+      ["--disable-warning=ExperimentalWarning", script, outDir],
+      { stdio: "inherit" },
+    )
     const passed = result.status === 0
     if (!passed) failures += 1
     console.log(`${passed ? "PASS" : "FAIL"}  ${name}`)

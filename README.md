@@ -508,8 +508,10 @@ Real-browser checks live in [checks/](checks/) and run with
 starts a dev server, drives headless Chromium through pointer drag-and-drop,
 printing to PDF, the permission-restricted page, conditional logic and the
 playground, and writes its screenshots and PDFs to `checks/output` for
-inspection. Chromium comes from the Playwright install in the sibling feedback
-repo; set `PLAYWRIGHT_DIR` if yours lives elsewhere.
+inspection. The checks are TypeScript like everything else, run directly by
+Node's type stripping; `playwright` is a devDependency, and its browser
+binaries come from the shared `ms-playwright` cache (`npx playwright install
+chromium` fetches them if missing).
 
 Pure logic (schema conversion, reducer, validation, registry, key slugging) is
 unit tested, including compiling the generated schema with Ajv in strict 2020-12

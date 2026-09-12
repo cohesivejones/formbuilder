@@ -1,23 +1,17 @@
-import { chromium } from "./browser.mjs"
-
-const OUT = process.argv[2]
-const URL = "http://localhost:5199/"
+import { chromium, type Locator } from "playwright"
+import { OUT, boxOf, report, watchErrors } from "./support.mts"
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const errors = []
-page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`))
-page.on("console", (m) => {
-  if (m.type() === "error") errors.push(`console: ${m.text()}`)
-})
+const errors = watchErrors(page)
 
-await page.goto(URL)
+await page.goto("http://localhost:5199/")
 await page.evaluate(() => localStorage.clear())
 await page.reload()
 await page.getByText("Your form is empty").waitFor()
 
-async function drag(fromLocator, toPoint) {
-  const from = await fromLocator.boundingBox()
+async function drag(fromLocator: Locator, toPoint: { x: number; y: number }) {
+  const from = await boxOf(fromLocator)
   const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 }
   await page.mouse.move(start.x, start.y)
   await page.mouse.down()
@@ -28,19 +22,26 @@ async function drag(fromLocator, toPoint) {
   await page.waitForTimeout(150)
 }
 
-const results = {}
+const results = {
+  order: [] as string[],
+  paletteDisabled: false,
+  hasLabelInput: -1,
+  hasKeyInput: -1,
+  cardScale: "",
+  schemaKeys: [] as string[],
+  persistedScale: "",
+}
 
 // 1. Built-ins still drag: Text onto the empty canvas.
-const dropArea = page.getByTestId("canvas-drop-area")
-let box = await dropArea.boundingBox()
+const dropArea = await boxOf(page.getByTestId("canvas-drop-area"))
 await drag(page.getByRole("button", { name: "Add Text field" }), {
-  x: box.x + box.width / 2,
-  y: box.y + box.height / 2,
+  x: dropArea.x + dropArea.width / 2,
+  y: dropArea.y + dropArea.height / 2,
 })
 await page.getByTestId("canvas-field-text").waitFor()
 
 // 2. Drag the custom Program question slot to land before Text.
-const first = await page.getByTestId("canvas-field-text").boundingBox()
+const first = await boxOf(page.getByTestId("canvas-field-text"))
 await drag(page.getByRole("button", { name: "Add Program question field" }), {
   x: first.x + first.width / 2,
   y: first.y + 8,
@@ -49,7 +50,10 @@ await page.getByTestId("canvas-field-programQuestionSlot").waitFor()
 results.order = await page
   .locator('[data-testid^="canvas-field-"]')
   .evaluateAll((els) =>
-    els.map((e) => e.dataset.testid.replace("canvas-field-", "")),
+    els.map(
+      (e) =>
+        (e as HTMLElement).dataset.testid?.replace("canvas-field-", "") ?? "",
+    ),
   )
 results.paletteDisabled = await page
   .getByRole("button", { name: "Add Program question field" })
@@ -59,38 +63,42 @@ results.paletteDisabled = await page
 results.hasLabelInput = await page.getByLabel("Label", { exact: true }).count()
 results.hasKeyInput = await page.getByLabel("Key", { exact: true }).count()
 await page.getByLabel("Answer scale").selectOption("rating-pictogram")
-results.cardScale = await page
-  .getByTestId("canvas-field-programQuestionSlot")
-  .getByText(/Answer scale/)
-  .textContent()
+results.cardScale =
+  (await page
+    .getByTestId("canvas-field-programQuestionSlot")
+    .getByText(/Answer scale/)
+    .textContent()) ?? ""
 await page.screenshot({ path: `${OUT}/slot-01-properties.png` })
 
 // 4. Schema excludes the dataless slot; text remains.
 await page.getByRole("tab", { name: /^Schema/ }).click()
-const schema = JSON.parse(await page.getByTestId("schema-json").textContent())
+const schema = JSON.parse(
+  (await page.getByTestId("schema-json").textContent()) ?? "{}",
+) as { properties: Record<string, unknown> }
 results.schemaKeys = Object.keys(schema.properties)
 await page.screenshot({ path: `${OUT}/slot-02-schema.png` })
 
 // 5. Reload: persisted form comes back with the slot intact.
 await page.reload()
 await page.getByTestId("canvas-field-programQuestionSlot").waitFor()
-results.persistedScale = await page
-  .getByTestId("canvas-field-programQuestionSlot")
-  .getByText(/Answer scale/)
-  .textContent()
+results.persistedScale =
+  (await page
+    .getByTestId("canvas-field-programQuestionSlot")
+    .getByText(/Answer scale/)
+    .textContent()) ?? ""
 
 console.log(JSON.stringify(results, null, 2))
 console.log("errors:", errors.length ? errors : "none")
 await browser.close()
 
-const ok =
+report(
+  "SLOT",
   results.order.join() === "programQuestionSlot,text" &&
-  results.paletteDisabled === true &&
-  results.hasLabelInput === 0 &&
-  results.hasKeyInput === 0 &&
-  /Pictogram/.test(results.cardScale) &&
-  results.schemaKeys.join() === "text" &&
-  /Pictogram/.test(results.persistedScale) &&
-  errors.length === 0
-console.log(ok ? "SLOT CHECK PASSED" : "SLOT CHECK FAILED")
-process.exit(ok ? 0 : 1)
+    results.paletteDisabled &&
+    results.hasLabelInput === 0 &&
+    results.hasKeyInput === 0 &&
+    /Pictogram/.test(results.cardScale) &&
+    results.schemaKeys.join() === "text" &&
+    /Pictogram/.test(results.persistedScale) &&
+    errors.length === 0,
+)

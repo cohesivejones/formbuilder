@@ -1,12 +1,22 @@
-import { chromium } from "./browser.mjs"
 import { statSync } from "node:fs"
+import { chromium } from "playwright"
+import { OUT, report, watchErrors } from "./support.mts"
 
-const OUT = process.argv[2]
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const errors = []
-page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`))
-const r = {}
+const errors = watchErrors(page)
+
+const r = {
+  screenSelectVisible: false,
+  screenTickListHidden: false,
+  selectHidden: false,
+  regionOptionsOnPaper: false,
+  placeholderHidden: "",
+  inputHeight: -1,
+  dateBoxOnPaper: false,
+  filledBytes: -1,
+  chosenRegionTicked: "",
+}
 
 await page.goto("http://localhost:5199/renderer")
 await page.getByRole("heading", { name: "Client intake" }).waitFor()
@@ -69,16 +79,16 @@ console.log(JSON.stringify(r, null, 2))
 console.log("errors:", errors.length ? errors : "none")
 await browser.close()
 
-const ok =
+report(
+  "PAPER",
   r.screenSelectVisible &&
-  r.screenTickListHidden &&
-  r.selectHidden &&
-  r.regionOptionsOnPaper &&
-  r.placeholderHidden === "rgba(0, 0, 0, 0)" &&
-  r.inputHeight >= 33 &&
-  r.dateBoxOnPaper &&
-  r.chosenRegionTicked.includes("✓") &&
-  r.filledBytes > 1000 &&
-  errors.length === 0
-console.log(ok ? "PAPER CHECK PASSED" : "PAPER CHECK FAILED")
-process.exit(ok ? 0 : 1)
+    r.screenTickListHidden &&
+    r.selectHidden &&
+    r.regionOptionsOnPaper &&
+    r.placeholderHidden === "rgba(0, 0, 0, 0)" &&
+    r.inputHeight >= 33 &&
+    r.dateBoxOnPaper &&
+    r.chosenRegionTicked.includes("✓") &&
+    r.filledBytes > 1000 &&
+    errors.length === 0,
+)

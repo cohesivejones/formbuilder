@@ -1,12 +1,21 @@
 import { statSync } from "node:fs"
-import { chromium } from "./browser.mjs"
+import { chromium } from "playwright"
+import { OUT, report, watchErrors } from "./support.mts"
 
-const OUT = process.argv[2]
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const errors = []
-page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`))
-const r = {}
+const errors = watchErrors(page)
+
+const r = {
+  blankBytes: -1,
+  navHidden: false,
+  sidebarHidden: false,
+  formVisible: false,
+  actionsHidden: false,
+  bodyScrolls: "",
+  printedHeight: -1,
+  filledBytes: -1,
+}
 
 await page.goto("http://localhost:5199/renderer")
 await page.getByRole("heading", { name: "Client intake" }).waitFor()
@@ -21,7 +30,7 @@ r.blankBytes = statSync(`${OUT}/form-blank.pdf`).size
 
 // What the print stylesheet leaves on the page, checked in print media.
 await page.emulateMedia({ media: "print" })
-const hidden = async (sel) =>
+const hidden = async (sel: string) =>
   page
     .locator(sel)
     .first()
@@ -62,15 +71,15 @@ console.log(JSON.stringify(r, null, 2))
 console.log("errors:", errors.length ? errors : "none")
 await browser.close()
 
-const ok =
+report(
+  "PDF",
   r.blankBytes > 1000 &&
-  r.filledBytes > 1000 &&
-  r.navHidden &&
-  r.sidebarHidden &&
-  r.formVisible &&
-  r.actionsHidden &&
-  r.bodyScrolls === "visible" &&
-  r.printedHeight > 900 &&
-  errors.length === 0
-console.log(ok ? "PDF CHECK PASSED" : "PDF CHECK FAILED")
-process.exit(ok ? 0 : 1)
+    r.filledBytes > 1000 &&
+    r.navHidden &&
+    r.sidebarHidden &&
+    r.formVisible &&
+    r.actionsHidden &&
+    r.bodyScrolls === "visible" &&
+    r.printedHeight > 900 &&
+    errors.length === 0,
+)

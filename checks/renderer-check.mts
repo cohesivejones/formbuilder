@@ -1,14 +1,22 @@
-import { chromium } from "./browser.mjs"
+import { chromium } from "playwright"
+import { OUT, boxOf, report, watchErrors } from "./support.mts"
 
-const OUT = process.argv[2]
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const errors = []
-page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`))
-page.on("console", (m) => {
-  if (m.type() === "error") errors.push(`console: ${m.text()}`)
-})
-const r = {}
+const errors = watchErrors(page)
+
+const r = {
+  loadedFromBuilder: false,
+  fieldsRendered: -1,
+  alert: "",
+  requiredError: -1,
+  emailError: -1,
+  submitted: {} as Record<string, unknown>,
+  pastedGroup: -1,
+  pastedSubmission: {} as Record<string, unknown>,
+  parseError: "",
+  formUnchanged: -1,
+}
 
 // 1. Build a form on the homepage so the renderer has something to pick up.
 await page.goto("http://localhost:5199/")
@@ -36,9 +44,7 @@ await page.screenshot({ path: `${OUT}/renderer-01-loaded.png` })
 //    would show up here.
 await page.getByLabel(/Contact email/).fill("not-an-email")
 await page.waitForTimeout(300)
-const submitBox = await page
-  .getByRole("button", { name: "Submit" })
-  .boundingBox()
+const submitBox = await boxOf(page.getByRole("button", { name: "Submit" }))
 await page.mouse.move(
   submitBox.x + submitBox.width / 2,
   submitBox.y + submitBox.height / 2,
@@ -57,7 +63,10 @@ await page.getByLabel(/Nickname/).fill("Ada")
 await page.getByLabel(/Contact email/).fill("ada@example.com")
 await page.getByRole("button", { name: "Submit" }).click()
 await page.getByRole("heading", { name: "Submitted answers" }).waitFor()
-r.submitted = JSON.parse(await page.locator("pre code").innerText())
+r.submitted = JSON.parse(await page.locator("pre code").innerText()) as Record<
+  string,
+  unknown
+>
 await page.screenshot({ path: `${OUT}/renderer-03-submitted.png` })
 
 // 5. A pasted definition replaces the rendered form; a bad paste explains itself.
@@ -90,7 +99,9 @@ await page.getByRole("heading", { name: "Pasted form" }).waitFor()
 r.pastedGroup = await page.getByRole("group", { name: /Colour/ }).count()
 await page.getByRole("radio", { name: "Blue" }).check()
 await page.getByRole("button", { name: "Submit" }).click()
-r.pastedSubmission = JSON.parse(await page.locator("pre code").innerText())
+r.pastedSubmission = JSON.parse(
+  await page.locator("pre code").innerText(),
+) as Record<string, unknown>
 
 await page.getByLabel("Form definition JSON").fill("{ broken")
 await page.getByRole("button", { name: "Render this form" }).click()
@@ -103,18 +114,18 @@ console.log(JSON.stringify(r, null, 2))
 console.log("errors:", errors.length ? errors : "none")
 await browser.close()
 
-const ok =
+report(
+  "RENDERER",
   r.loadedFromBuilder &&
-  r.fieldsRendered === 2 &&
-  /2 answers to fix/.test(r.alert) &&
-  r.requiredError === 2 &&
-  r.emailError === 2 &&
-  r.submitted.nickname === "Ada" &&
-  r.submitted.contactEmail === "ada@example.com" &&
-  r.pastedGroup === 1 &&
-  r.pastedSubmission.colour === "blue" &&
-  /not valid JSON/.test(r.parseError) &&
-  r.formUnchanged === 1 &&
-  errors.length === 0
-console.log(ok ? "RENDERER CHECK PASSED" : "RENDERER CHECK FAILED")
-process.exit(ok ? 0 : 1)
+    r.fieldsRendered === 2 &&
+    /2 answers to fix/.test(r.alert) &&
+    r.requiredError === 2 &&
+    r.emailError === 2 &&
+    r.submitted.nickname === "Ada" &&
+    r.submitted.contactEmail === "ada@example.com" &&
+    r.pastedGroup === 1 &&
+    r.pastedSubmission.colour === "blue" &&
+    /not valid JSON/.test(r.parseError) &&
+    r.formUnchanged === 1 &&
+    errors.length === 0,
+)

@@ -1,15 +1,25 @@
-import { chromium } from "./browser.mjs"
+import { chromium } from "playwright"
+import { OUT, boxOf, report, watchErrors } from "./support.mts"
 
-const OUT = process.argv[2]
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const errors = []
-page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`))
-page.on("console", (m) => {
-  if (m.type() === "error") errors.push(`console: ${m.text()}`)
-})
+const errors = watchErrors(page)
 
-const r = {}
+const r = {
+  rootHasPalette: false,
+  navUrl: "",
+  paletteGone: false,
+  addButtons: -1,
+  navActive: "",
+  lockedBadges: -1,
+  dragHandles: -1,
+  anchoredDeleteDisabled: false,
+  reworded: -1,
+  keyUnchanged: -1,
+  orderAfterDrag: "",
+  deepLinkOk: false,
+  unknownRedirect: "",
+}
 
 // 1. Root route: the full builder, palette present.
 await page.goto("http://localhost:5199/")
@@ -63,13 +73,9 @@ const handle = page.getByRole("button", {
 // The comment field sits below the fold; bring it into view before pointing at it.
 await handle.scrollIntoViewIfNeeded()
 await page.waitForTimeout(100)
-const box = await handle.boundingBox()
-const card = await page
-  .getByTestId("canvas-field-additionalComments")
-  .boundingBox()
-const target = await page
-  .getByTestId("canvas-field-programQuestionSlot")
-  .boundingBox()
+const box = await boxOf(handle)
+const card = await boxOf(page.getByTestId("canvas-field-additionalComments"))
+const target = await boxOf(page.getByTestId("canvas-field-programQuestionSlot"))
 // Sorting uses closest-center, so move the card's centre past the target's.
 const dy = target.y + target.height / 2 - (card.y + card.height / 2) - 8
 const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
@@ -84,7 +90,10 @@ r.orderAfterDrag = (
   await page
     .locator('[data-testid^="canvas-field-"]')
     .evaluateAll((els) =>
-      els.map((e) => e.dataset.testid.replace("canvas-field-", "")),
+      els.map(
+        (e) =>
+          (e as HTMLElement).dataset.testid?.replace("canvas-field-", "") ?? "",
+      ),
     )
 ).join()
 
@@ -100,20 +109,20 @@ console.log(JSON.stringify(r, null, 2))
 console.log("errors:", errors.length ? errors : "none")
 await browser.close()
 
-const ok =
+report(
+  "ROUTES",
   r.navUrl === "/locked-down" &&
-  r.paletteGone &&
-  r.addButtons === 0 &&
-  /Locked-down form/.test(r.navActive) &&
-  r.lockedBadges === 3 &&
-  r.dragHandles === 2 &&
-  r.anchoredDeleteDisabled === true &&
-  r.reworded === 1 &&
-  r.keyUnchanged === 1 &&
-  r.orderAfterDrag ===
-    "serviceListened,serviceReceived,situationImproved,additionalComments,programQuestionSlot" &&
-  r.deepLinkOk &&
-  r.unknownRedirect === "/" &&
-  errors.length === 0
-console.log(ok ? "ROUTES CHECK PASSED" : "ROUTES CHECK FAILED")
-process.exit(ok ? 0 : 1)
+    r.paletteGone &&
+    r.addButtons === 0 &&
+    /Locked-down form/.test(r.navActive) &&
+    r.lockedBadges === 3 &&
+    r.dragHandles === 2 &&
+    r.anchoredDeleteDisabled &&
+    r.reworded === 1 &&
+    r.keyUnchanged === 1 &&
+    r.orderAfterDrag ===
+      "serviceListened,serviceReceived,situationImproved,additionalComments,programQuestionSlot" &&
+    r.deepLinkOk &&
+    r.unknownRedirect === "/" &&
+    errors.length === 0,
+)

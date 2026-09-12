@@ -1,14 +1,23 @@
-import { chromium } from "./browser.mjs"
+import { chromium } from "playwright"
+import { OUT, report, watchErrors } from "./support.mts"
 
-const OUT = process.argv[2]
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const errors = []
-page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`))
-page.on("console", (m) => {
-  if (m.type() === "error") errors.push(`console: ${m.text()}`)
-})
-const r = {}
+const errors = watchErrors(page)
+
+const r = {
+  phoneHiddenAtStart: false,
+  phoneGoneAgain: false,
+  alert: "",
+  submitted: {} as Record<string, unknown>,
+  prefilled: "",
+  loosenedRuleApplies: false,
+  cardRule: -1,
+  parseError: "",
+  semanticError: "",
+  suggestion: "",
+  completed: "",
+}
 
 // 1. The demo page: fields appear and disappear with the answers.
 await page.goto("http://localhost:5199/conditions")
@@ -36,7 +45,7 @@ await page.getByRole("button", { name: "Submit" }).click()
 await page.getByTestId("conditions-submission").waitFor()
 r.submitted = JSON.parse(
   await page.getByTestId("conditions-submission").innerText(),
-)
+) as Record<string, unknown>
 await page.screenshot({ path: `${OUT}/cond-02-submitted.png` })
 
 // 3. The hidden questions still reach paper, prefaced by when they apply.
@@ -99,25 +108,25 @@ console.log(JSON.stringify(r, null, 2))
 console.log("errors:", errors.length ? errors : "none")
 await browser.close()
 
-const ok =
+report(
+  "CONDITIONS",
   /its options are 'option1', 'option2', 'option3'/.test(r.semanticError) &&
-  r.suggestion === "reason" &&
-  r.completed === "reason" &&
-  r.prefilled === "contactMethod = 'phone'" &&
-  r.loosenedRuleApplies &&
-  r.phoneHiddenAtStart &&
-  r.phoneGoneAgain &&
-  /Anything else\?: This field is required/.test(r.alert) &&
-  // hasAllergies: false is a real answer (the box was ticked then unticked);
-  // what must be absent is the hidden phone number and allergy details.
-  JSON.stringify(r.submitted) ===
-    JSON.stringify({
-      contactMethod: "none",
-      hasAllergies: false,
-      finalComments: "All good",
-    }) &&
-  r.cardRule === 1 &&
-  /did you mean showMore\?/.test(r.parseError) &&
-  errors.length === 0
-console.log(ok ? "CONDITIONS CHECK PASSED" : "CONDITIONS CHECK FAILED")
-process.exit(ok ? 0 : 1)
+    r.suggestion === "reason" &&
+    r.completed === "reason" &&
+    r.prefilled === "contactMethod = 'phone'" &&
+    r.loosenedRuleApplies &&
+    r.phoneHiddenAtStart &&
+    r.phoneGoneAgain &&
+    /Anything else\?: This field is required/.test(r.alert) &&
+    // hasAllergies: false is a real answer (the box was ticked then unticked);
+    // what must be absent is the hidden phone number and allergy details.
+    JSON.stringify(r.submitted) ===
+      JSON.stringify({
+        contactMethod: "none",
+        hasAllergies: false,
+        finalComments: "All good",
+      }) &&
+    r.cardRule === 1 &&
+    /did you mean showMore\?/.test(r.parseError) &&
+    errors.length === 0,
+)

@@ -1,14 +1,20 @@
-import { chromium } from "./browser.mjs"
+import { chromium } from "playwright"
+import { OUT, report, watchErrors } from "./support.mts"
 
-const OUT = process.argv[2]
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const errors = []
-page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`))
-page.on("console", (m) => {
-  if (m.type() === "error") errors.push(`console: ${m.text()}`)
-})
-const r = {}
+const errors = watchErrors(page)
+
+const r = {
+  seedVerdict: "",
+  ungroupedVerdict: "",
+  groupedVerdict: "",
+  groupedExpression: "",
+  typedTree: {} as Record<string, unknown>,
+  typedVerdictAbsent: "",
+  typedVerdictPresent: "",
+  semanticError: -1,
+}
 
 await page.goto("http://localhost:5199/playground")
 await page.getByLabel("Expression").waitFor()
@@ -34,7 +40,9 @@ await input.fill("")
 await input.pressSequentially("house")
 await page.getByRole("option", { name: "householdSize" }).click()
 await input.pressSequentially(" >= 2")
-r.typedTree = JSON.parse(await page.getByTestId("playground-tree").innerText())
+r.typedTree = JSON.parse(
+  await page.getByTestId("playground-tree").innerText(),
+) as Record<string, unknown>
 // The answers were replaced above and hold no householdSize, so no match —
 // until the answers say otherwise.
 r.typedVerdictAbsent = await page.getByTestId("playground-verdict").innerText()
@@ -51,16 +59,16 @@ console.log(JSON.stringify(r, null, 2))
 console.log("errors:", errors.length ? errors : "none")
 await browser.close()
 
-const ok =
+report(
+  "PLAYGROUND",
   /^Matches/.test(r.seedVerdict) &&
-  /^Matches/.test(r.ungroupedVerdict) &&
-  /^No match/.test(r.groupedVerdict) &&
-  r.groupedExpression.includes("(contactMethod = 'phone'") &&
-  JSON.stringify(r.typedTree) ===
-    JSON.stringify({ op: "gte", field: "householdSize", value: 2 }) &&
-  /^No match/.test(r.typedVerdictAbsent) &&
-  /^Matches/.test(r.typedVerdictPresent) &&
-  r.semanticError === 1 &&
-  errors.length === 0
-console.log(ok ? "PLAYGROUND CHECK PASSED" : "PLAYGROUND CHECK FAILED")
-process.exit(ok ? 0 : 1)
+    /^Matches/.test(r.ungroupedVerdict) &&
+    /^No match/.test(r.groupedVerdict) &&
+    r.groupedExpression.includes("(contactMethod = 'phone'") &&
+    JSON.stringify(r.typedTree) ===
+      JSON.stringify({ op: "gte", field: "householdSize", value: 2 }) &&
+    /^No match/.test(r.typedVerdictAbsent) &&
+    /^Matches/.test(r.typedVerdictPresent) &&
+    r.semanticError === 1 &&
+    errors.length === 0,
+)
